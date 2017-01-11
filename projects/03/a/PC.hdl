@@ -16,5 +16,13 @@ CHIP PC {
     OUT out[16];
 
     PARTS:
-    // Put your code here:
+    // Do the add regardless
+    Add16(a=old, b[0]=inc, out=postinc);
+    // Toss it out if load is true and use in instead
+    Mux16(a=postinc, b=in, sel=load, out=loadorinc);
+    // Set to zero if reset == 1, otherwise use the load or inc 
+    Mux16(a=loadorinc, b=false, sel=reset, out=final);
+    // Store the new value no matter what, and feedback
+    Register(in=final, load=true, out=old);
+    And16(a=true, b=old, out=out);
 }

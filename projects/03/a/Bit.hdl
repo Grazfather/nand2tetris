@@ -14,5 +14,10 @@ CHIP Bit {
     OUT out;
 
     PARTS:
-    // Put your code here:
+    // Select the new bit: Either the old one or the new input
+    Mux(a=old, b=in, sel=load, out=bit);
+    // Feed in the new bit while retrieving the old
+    DFF(in=bit, out=old);
+    // Dumb buffer
+    And(a=true, b=old, out=out);
 }
