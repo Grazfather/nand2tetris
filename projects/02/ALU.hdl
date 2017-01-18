@@ -63,7 +63,7 @@ CHIP ALU {
     Not16(in=out1, out=notOut1);
 
     // Select negated or not
-    Mux16(a=out1, b=notOut1, sel=no, out=finalOut);
+    Mux16(a=out1, b=notOut1, sel=no, out=finalOut, out=out);
     And16(a=finalOut, b=true, out[0..7]=finalOutLow, out[8..15]=finalOutHigh);
 
     // Set flags
@@ -73,6 +73,5 @@ CHIP ALU {
     // Output
     Or(a=orLow, b=orHigh, out=either);
     Not(in=either, out=zr);
-    And16(a=finalOut, b=true, out[0..6]=useless, out[7]=ng);
-    And16(a=true, b=finalOut, out=out);
+    And16(a=finalOut, b=true, out[7]=ng);
 }
