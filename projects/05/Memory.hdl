@@ -27,15 +27,12 @@ CHIP Memory {
     OUT out[16];
 
     PARTS:
-    // Determine whether to write ram
-    Not(in=address[14], out=Under0x4000);
-    And(a=load, b=Under0x4000, out=loadRam);
+    // Send load to the appropriate device
+    DMux(in=load, sel=address[14], a=loadRam, b=loadScreenOrKeyboard);
+    Not(in=address[13], out=notBit13);
+    And(a=loadScreenOrKeyboard, b=notBit13, out=loadScreen);
 
-    // Determine whether to write screen
-    And(a=load, b=address[14], out=loadScreen1);
-    Not(in=address[13], out=notDbit);
-    And(a=loadScreen1, b=notDbit, out=loadScreen);
-
+    // Send address and whether to load or not into devices
     RAM16K(in=in, address=address[0..13], load=loadRam, out=RamOut);
     Screen(in=in, address=address[0..12], load=loadScreen, out=ScreenOut);
     Keyboard(out=KeyboardOut);
