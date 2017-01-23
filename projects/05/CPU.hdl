@@ -6,23 +6,23 @@
 /**
  * The Hack CPU (Central Processing unit), consisting of an ALU,
  * two registers named A and D, and a program counter named PC.
- * The CPU is designed to fetch and execute instructions written in 
+ * The CPU is designed to fetch and execute instructions written in
  * the Hack machine language. In particular, functions as follows:
- * Executes the inputted instruction according to the Hack machine 
+ * Executes the inputted instruction according to the Hack machine
  * language specification. The D and A in the language specification
  * refer to CPU-resident registers, while M refers to the external
- * memory location addressed by A, i.e. to Memory[A]. The inM input 
- * holds the value of this location. If the current instruction needs 
- * to write a value to M, the value is placed in outM, the address 
- * of the target location is placed in the addressM output, and the 
- * writeM control bit is asserted. (When writeM==0, any value may 
- * appear in outM). The outM and writeM outputs are combinational: 
- * they are affected instantaneously by the execution of the current 
- * instruction. The addressM and pc outputs are clocked: although they 
- * are affected by the execution of the current instruction, they commit 
- * to their new values only in the next time step. If reset==1 then the 
- * CPU jumps to address 0 (i.e. pc is set to 0 in next time step) rather 
- * than to the address resulting from executing the current instruction. 
+ * memory location addressed by A, i.e. to Memory[A]. The inM input
+ * holds the value of this location. If the current instruction needs
+ * to write a value to M, the value is placed in outM, the address
+ * of the target location is placed in the addressM output, and the
+ * writeM control bit is asserted. (When writeM==0, any value may
+ * appear in outM). The outM and writeM outputs are combinational:
+ * they are affected instantaneously by the execution of the current
+ * instruction. The addressM and pc outputs are clocked: although they
+ * are affected by the execution of the current instruction, they commit
+ * to their new values only in the next time step. If reset==1 then the
+ * CPU jumps to address 0 (i.e. pc is set to 0 in next time step) rather
+ * than to the address resulting from executing the current instruction.
  */
 
 CHIP CPU {
@@ -34,10 +34,48 @@ CHIP CPU {
                          // the current program (reset==0).
 
     OUT outM[16],        // M value output
-        writeM,          // Write to M? 
+        writeM,          // Write to M?
         addressM[15],    // Address in data memory (of M)
         pc[15];          // address of next instruction
 
     PARTS:
-    // Put your code here:
+    // First, everything is based on whether it's a C or A instruction
+    Not(in=instruction[15], out=aInstruction);
+    Not(in=aInstruction, out=cInstruction);
+
+    PC(reset=reset, load=allowJmp, inc=incPC, in=aOut, out[0..14]=pc);
+    Mux16(a=aluOut, b=instruction, sel=aInstruction, out=newAddress);
+
+    // Write A based on d1, instruction bit 5, or cInstruction
+    Or(a=aInstruction, b=instruction[5], out=writeA);
+    ARegister(in=newAddress, load=writeA, out=aOut, out[0..14]=addressM);
+
+    // Write D based on d2, instruction bit 4
+    And(a=instruction[4], b=cInstruction, out=writeD);
+    DRegister(in=aluOut, load=writeD, out=dOut);
+
+    // Write M based on d3, instruction bit 3
+    And(a=instruction[3], b=cInstruction, out=writeM);
+
+    // Whether to use A or M as second op based on a, bit 12
+    Mux16(a=aOut, b=inM, sel=instruction[12], out=aOrMValue);
+    ALU(x=dOut, y=aOrMValue,
+        zx=instruction[11], nx=instruction[10], zy=instruction[9],
+	ny=instruction[8], f=instruction[7], no=instruction[6],
+	out=aluOut, out=outM, zr=zr, ng=ng);
+
+    // Jumps
+    // -- Greater than (j3)
+    Or(a=ng, b=zr, out=le);
+    Not(in=le, out=gt);
+    And(a=gt, b=instruction[0], out=jmpGT);
+    // -- Equal (j2)
+    And(a=zr, b=instruction[1], out=jmpEQ);
+    // -- Less than (j1)
+    And(a=ng, b=instruction[2], out=jmpLT);
+    // Combine
+    Or(a=jmpGT, b=jmpEQ, out=jmpGE);
+    Or(a=jmpGE, b=jmpLT, out=jmp);
+    And(a=jmp, b=cInstruction, out=allowJmp);
+    Not(in=allowJmp, out=incPC);
 }
