@@ -5,6 +5,9 @@ SEGMENT_MAP = {
     "that": "THAT",
 }
 
+filename = ""
+count = 0
+
 
 def get_addr(segment, offset):
     """Return instructions to set both A and D to the address specified by
@@ -19,14 +22,16 @@ def get_addr(segment, offset):
     else:
         if segment == "pointer":
             ins.append("@3")
-            ins.append("D=A")
         elif segment == "temp":
             ins.append("@5")
-            ins.append("D=A")
-    # TODO: Static
-    # -- Add offset
-    ins.append("@{}".format(offset))
-    ins.append("AD=D+A")
+        elif segment == "static":
+            ins.append("@{}.{}".format(filename, offset))
+
+        ins.append("D=A")
+
+    if offset:
+        ins.append("@{}".format(offset))
+        ins.append("AD=D+A")
 
     return ins
 
@@ -111,36 +116,43 @@ def neg_command(command):
     return ins
 
 
-def eq_command(command):
+def cmp_command(comparison, command):
+    true_label = "{}_TRUE_{}".format(comparison, count)
+    end_label = "{}_END_{}".format(comparison, count)
     ins = []
     ins.extend(pop_into_addr("R13"))
     ins.extend(pop_into_addr("R14"))
     ins.append("@13")
-    ins.append("D=M-D")
-    # ins.append("@")
+    ins.append("D=D-M")
+    ins.append("@{}".format(true_label))
+    ins.append("D;J{}".format(comparison)) # If equal, set D to 0xFFFF
+    ins.append("D=0") # Otherwise, set D to 0
+    ins.append("@{}".format(end_label))
+    ins.append("0;JMP")
+    ins.append("({})".format(true_label))
+    ins.append("D=-1")
+    ins.append("({})".format(end_label))
     ins.extend(push_d())
 
     return ins
 
+def boolean_command(op, command):
+    ins = []
+    ins.extend(pop_into_addr("R13"))
+    ins.extend(pop_into_addr("R14"))
+    ins.append("@13")
+    ins.append("D=D{}M".format(op))
+    ins.extend(push_d())
 
-def gt_command(command):
-    return []
-
-
-def lt_command(command):
-    return []
-
-
-def and_command(command):
-    return []
-
-
-def or_command(command):
-    return []
-
+    return ins
 
 def not_command(command):
-    return []
+    ins = []
+    ins.extend(pop_into_addr("R13"))
+    ins.append("D=!D")
+    ins.extend(push_d())
+
+    return ins
 
 
 def pop_d():

@@ -1,18 +1,14 @@
 #!/bin/env python
 
 import sys
-import os
+import glob
+import os.path as op
 from collections import namedtuple
+from functools import partial
 
 import translations
 
 Command = namedtuple("Command", "line type command arg1 arg2")
-# from abc import ABCMeta
-# class Command(metaclass=ABCMeta):
-    # pass
-
-# class ArithmeticCommand(Command):
-    # pass
 
 ARITH_COMMANDS = {"add", "sub", "neg", "eq", "gt", "lt", "and", "or", "not"}
 MEM_COMMANDS = {"pop", "push"}
@@ -22,11 +18,11 @@ COMMAND_MAP = {
     "push": translations.push_command,
     "pop": translations.pop_command,
     "neg": translations.neg_command,
-    "eq": translations.eq_command,
-    "gt": translations.gt_command,
-    "lt": translations.lt_command,
-    "and": translations.and_command,
-    "or": translations.or_command,
+    "eq": partial(translations.cmp_command, "EQ"),
+    "gt": partial(translations.cmp_command, "GT"),
+    "lt": partial(translations.cmp_command, "LT"),
+    "and": partial(translations.boolean_command, "&"),
+    "or": partial(translations.boolean_command, "|"),
     "not": translations.not_command,
 }
 
@@ -67,24 +63,38 @@ def translate_command(command):
 
 
 def main(filepath):
-    # Read in lines
-    with open(filepath, "r") as f:
-        lines = f.readlines()
+    if op.isdir(filepath):
+        path = filepath
+        module = op.basename(op.normpath(op.realpath(filepath)))
+        files = glob.glob("{}/*.vm".format(filepath))
+    else:
+        path = op.dirname(filepath)
+        module = op.splitext(op.basename(filepath))[0]
+        files = [filepath]
 
     asm = []
-    # Parse and translate each line
-    for line in lines:
-        command = parse_line(line)
-        asm.extend(translate_command(command))
+
+    for fn in files:
+        # UGLY: Filename must communicated with the translator
+        translations.filename = op.basename(op.splitext(fn)[0])
+        # Read in lines
+        with open(fn, "r") as f:
+            lines = f.readlines()
+
+        # Parse and translate each line
+        translations.count = 0
+        for line in lines:
+            command = parse_line(line)
+            translations.count += 1
+            asm.extend(translate_command(command))
 
     # Write a new asm file
-    fn = os.path.splitext(filepath)[0]
-    with open("{}.asm".format(fn), "w") as f:
+    with open(op.join(path, "{}.asm".format(module)), "w") as f:
         f.write("\n".join(asm))
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
-        print("Usage: {} <vm file>".format(sys.argv[0]))
+        print("Usage: {} <vm file or path>".format(sys.argv[0]))
         sys.exit(1)
 
     main(sys.argv[1])
