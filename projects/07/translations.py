@@ -80,79 +80,75 @@ def pop_command(command):
 
 
 def add_command(command):
-    ins = []
-    # Pop second arg into temp
-    ins.extend(pop_into_addr("R13"))
-    # Pop second arg into temp
-    ins.extend(pop_into_addr("R14"))
-    # Calculate and push result
-    ins.append("@R13")
-    ins.append("D=M+D")
-    ins.extend(push_d())
-
-    return ins
+    return [
+        # Pop second arg into temp
+        *pop_into_addr("R13"),
+        # Pop second arg into temp
+        *pop_into_addr("R14"),
+        # Calculate and push result
+        "@R13",
+        "D=M+D",
+        *push_d(),
+    ]
 
 
 def sub_command(command):
-    ins = []
-    # Pop second arg into temp
-    ins.extend(pop_into_addr("R14"))
-    # Pop first arg into temp
-    ins.extend(pop_into_addr("R13"))
-    # Calculate and push result
-    ins.append("@R14")
-    ins.append("D=D-M")
-    ins.extend(push_d())
-
-    return ins
+    return [
+        # Pop second arg into temp
+        *pop_into_addr("R14"),
+        # Pop first arg into temp
+        *pop_into_addr("R13"),
+        # Calculate and push result
+        "@R14",
+        "D=D-M",
+        *push_d(),
+    ]
 
 
 def neg_command(command):
-    ins = []
-    ins.extend(pop_into_addr("R13"))
-    ins.append("D=-D")
-    ins.extend(push_d())
-
-    return ins
+    return [
+        *pop_into_addr("R13"),
+        "D=-D",
+        *push_d(),
+    ]
 
 
 def cmp_command(comparison, command):
     true_label = "{}_TRUE_{}".format(comparison, count)
     end_label = "{}_END_{}".format(comparison, count)
-    ins = []
-    ins.extend(pop_into_addr("R13"))
-    ins.extend(pop_into_addr("R14"))
-    ins.append("@13")
-    ins.append("D=D-M")
-    ins.append("@{}".format(true_label))
-    ins.append("D;J{}".format(comparison)) # If equal, set D to 0xFFFF
-    ins.append("D=0") # Otherwise, set D to 0
-    ins.append("@{}".format(end_label))
-    ins.append("0;JMP")
-    ins.append("({})".format(true_label))
-    ins.append("D=-1")
-    ins.append("({})".format(end_label))
-    ins.extend(push_d())
+    return [
+        *pop_into_addr("R13"),
+        *pop_into_addr("R14"),
+        "@13",
+        "D=D-M",
+        "@{}".format(true_label),
+        "D;J{}".format(comparison), # If equal, set D to 0xFFFF
+        "D=0", # Otherwise, set D to 0
+        "@{}".format(end_label),
+        "0;JMP",
+        "({})".format(true_label),
+        "D=-1",
+        "({})".format(end_label),
+        *push_d(),
+    ]
 
-    return ins
 
 def boolean_command(op, command):
-    ins = []
-    ins.extend(pop_into_addr("R13"))
-    ins.extend(pop_into_addr("R14"))
-    ins.append("@13")
-    ins.append("D=D{}M".format(op))
-    ins.extend(push_d())
+    return [
+        *pop_into_addr("R13"),
+        *pop_into_addr("R14"),
+        "@13",
+        "D=D{}M".format(op),
+        *push_d(),
+    ]
 
-    return ins
 
 def not_command(command):
-    ins = []
-    ins.extend(pop_into_addr("R13"))
-    ins.append("D=!D")
-    ins.extend(push_d())
-
-    return ins
+    return [
+        *pop_into_addr("R13"),
+        "D=!D",
+        *push_d(),
+    ]
 
 
 def pop_d():
