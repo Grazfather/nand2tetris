@@ -151,6 +151,27 @@ def not_command(command):
     ]
 
 
+def goto_command(command):
+    return [
+        "@{}".format(command.arg1),
+        "0;JMP",
+    ]
+
+
+def if_goto_command(command):
+    return [
+        *pop_d(),
+        "@{}".format(command.arg1),
+        "D;JNE",
+    ]
+
+
+def label_command(command):
+    return [
+        "({})".format(command.arg1)
+    ]
+
+
 def pop_d():
     """Return the list of instructions required to pop the top value of the
     stack into the D register.

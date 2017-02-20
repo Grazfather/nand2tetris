@@ -24,6 +24,9 @@ COMMAND_MAP = {
     "and": partial(translations.boolean_command, "&"),
     "or": partial(translations.boolean_command, "|"),
     "not": translations.not_command,
+    "goto": translations.goto_command,
+    "if-goto": translations.if_goto_command,
+    "label": translations.label_command,
 }
 
 
@@ -39,8 +42,10 @@ def parse_line(line):
     # Get command type
     if tokens[0] in MEM_COMMANDS:
         return Command(line, "MEM", tokens[0], tokens[1], tokens[2])
-    else:
+    elif tokens[0] in ARITH_COMMANDS:
         return Command(line, "ARITH", tokens[0], None, None)
+    else:
+        return Command(line, "BRANCH", tokens[0], tokens[1], None)
     # TODO: Add support for other command types
 
 
