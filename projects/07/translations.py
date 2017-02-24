@@ -55,18 +55,14 @@ def arith_command(op, _):
         # Pop second argument
         *pop_d(),
         # <op> it from the value now at the top of the stack
-        "@SP",
-        "A=M",
-        "A=A-1",
+        *get_stack_top_addr(),
         "M=M{}D".format(op),
     ]
 
 
 def neg_command(_):
     return [
-        "@SP",
-        "A=M",
-        "A=A-1",
+        *get_stack_top_addr(),
         "M=-M",
     ]
 
@@ -75,10 +71,9 @@ def cmp_command(comparison, command):
     true_label = label("{}_TRUE_{}".format(comparison, count))
     end_label = label("{}_END_{}".format(comparison, count))
     return [
-        *pop_into_addr("R13"),
-        *pop_into_addr("R14"),
-        "@R13",
-        "D=D-M",
+        *pop_d(),  # Read second arg
+        *get_stack_top_addr(), # Addr of first arg
+        "D=M-D",  # cmp
         "@{}".format(true_label),
         "D;J{}".format(comparison),  # If equal, set D to 0xFFFF
         "D=0",  # Otherwise, set D to 0
@@ -87,7 +82,8 @@ def cmp_command(comparison, command):
         "({})".format(true_label),
         "D=-1",
         "({})".format(end_label),
-        *push_d(),
+        *get_stack_top_addr(),
+        "M=D",
     ]
 
 
@@ -103,9 +99,7 @@ def boolean_command(op, _):
 
 def not_command(_):
     return [
-        "@SP",
-        "A=M",
-        "A=A-1",
+        *get_stack_top_addr(),
         "M=!M",
     ]
 
@@ -322,6 +316,16 @@ def incr_d():
     """
     return [
         "D=D+1",
+    ]
+
+
+def get_stack_top_addr():
+    """Set A to the address of the top of the stack (full).
+    """
+    return [
+        "@SP",
+        "A=M",
+        "A=A-1",
     ]
 
 
