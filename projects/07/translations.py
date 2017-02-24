@@ -50,27 +50,15 @@ def pop_command(command):
     ]
 
 
-def add_command(_):
+def arith_command(op, _):
     return [
         # Pop second argument
         *pop_d(),
-        # Add it to the value now at the top of the stack
+        # <op> it from the value now at the top of the stack
         "@SP",
         "A=M",
         "A=A-1",
-        "M=M+D",
-    ]
-
-
-def sub_command(_):
-    return [
-        # Pop second argument
-        *pop_d(),
-        # Sub it from the value now at the top of the stack
-        "@SP",
-        "A=M",
-        "A=A-1",
-        "M=M-D",
+        "M=M{}D".format(op),
     ]
 
 
@@ -140,12 +128,6 @@ def label_command(command):
     return [
         *add_label(label(command.arg1)),
     ]
-
-
-def label(label):
-    """Make a label unique to the function where it appaers.
-    """
-    return "{}${}".format(current_function, label)
 
 
 def call_command(command):
@@ -414,3 +396,9 @@ def add_label(name):
     """Add the named label.
     """
     return ["({})".format(name)]
+
+
+def label(label):
+    """Make a label unique to the function where it appears.
+    """
+    return "{}${}".format(current_function, label)

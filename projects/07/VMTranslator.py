@@ -15,9 +15,9 @@ MEM_COMMANDS = {"pop", "push"}
 BRANCH_COMMANDS = {"goto", "if-goto", "label"}
 
 COMMAND_MAP = {
-    "add": translations.add_command,
-    "sub": translations.sub_command,
     "push": translations.push_command,
+    "add": partial(translations.arith_command, "+"),
+    "sub": partial(translations.arith_command, "-"),
     "pop": translations.pop_command,
     "neg": translations.neg_command,
     "eq": partial(translations.cmp_command, "EQ"),
