@@ -240,6 +240,7 @@ def get_addr(segment, offset):
             ins.append("@5")
         elif segment == "static":
             ins.append("@{}.{}".format(filename, offset))
+            offset = None
 
         ins.append("D=A")
 
