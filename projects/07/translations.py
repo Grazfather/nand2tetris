@@ -76,9 +76,10 @@ def sub_command(_):
 
 def neg_command(_):
     return [
-        *pop_into_addr("R13"),
-        "D=-D",
-        *push_d(),
+        "@SP",
+        "A=M",
+        "A=A-1",
+        "M=-M",
     ]
 
 
@@ -114,9 +115,10 @@ def boolean_command(op, _):
 
 def not_command(_):
     return [
-        *pop_into_addr("R13"),
-        "D=!D",
-        *push_d(),
+        "@SP",
+        "A=M",
+        "A=A-1",
+        "M=!M",
     ]
 
 
