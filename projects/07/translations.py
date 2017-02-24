@@ -52,27 +52,25 @@ def pop_command(command):
 
 def add_command(_):
     return [
-        # Pop second arg into temp
-        *pop_into_addr("R13"),
-        # Pop second arg into temp
-        *pop_into_addr("R14"),
-        # Calculate and push result
-        "@R13",
-        "D=M+D",
-        *push_d(),
+        # Pop second argument
+        *pop_d(),
+        # Add it to the value now at the top of the stack
+        "@SP",
+        "A=M",
+        "A=A-1",
+        "M=M+D",
     ]
 
 
 def sub_command(_):
     return [
-        # Pop second arg into temp
-        *pop_into_addr("R14"),
-        # Pop first arg into temp
-        *pop_into_addr("R13"),
-        # Calculate and push result
-        "@R14",
-        "D=D-M",
-        *push_d(),
+        # Pop second argument
+        *pop_d(),
+        # Sub it from the value now at the top of the stack
+        "@SP",
+        "A=M",
+        "A=A-1",
+        "M=M-D",
     ]
 
 
