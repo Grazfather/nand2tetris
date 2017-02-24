@@ -203,34 +203,47 @@ def function_command(command):
 
 
 def return_command(_):
-    final_sp = "R13"
+    end_frame = "R13"
     ret_addr = "R14"
     return [
-        # Get return value, store over arg0
-        *pop_d(),  # RV in D
-        *deref_pointer_a("ARG"),
-        "M=D",  # Write RV
-        # Get SP (just after arg0 AKA return value)
-        *deref_pointer_d("ARG"),
-        *incr_d(),
-        *push_d(),
-        *pop_into_addr(final_sp),
-        # Remove the local frame
+        # End frame = LCL
         *deref_pointer_d("LCL"),
-        *push_d(),
-        *pop_into_addr("SP"),
-        # Restore caller context
-        *pop_into_addr("THAT"),
-        *pop_into_addr("THIS"),
-        *pop_into_addr("ARG"),
-        *pop_into_addr("LCL"),
-        *pop_into_addr(ret_addr),
-        # Fix SP
-        *deref_pointer_d(final_sp),
-        *push_d(),
-        *pop_into_addr("SP"),
-        *deref_pointer_d(ret_addr),
-        *jmp_d(),
+        *write_d_into_addr(end_frame),
+        # ret_addr = *(endFrame - 5)
+        *get_pointer_offset("LCL", -5),
+        "D=M",
+        *write_d_into_addr(ret_addr),
+        # ARG[0] = pop()
+        *pop_d(),
+        "@ARG",
+        "A=M",
+        "M=D",
+        # SP = ARG + 1
+        "@ARG",
+        "D=M",
+        "D=D+1",
+        "@SP",
+        "M=D",
+        # Restore THAT
+        *get_pointer_offset(end_frame, -1),
+        "D=M",
+        *write_d_into_addr("THAT"),
+        # Restore THIS
+        *get_pointer_offset(end_frame, -2),
+        "D=M",
+        *write_d_into_addr("THIS"),
+        # Restore ARG
+        *get_pointer_offset(end_frame, -3),
+        "D=M",
+        *write_d_into_addr("ARG"),
+        # Restore LCL
+        *get_pointer_offset(end_frame, -4),
+        "D=M",
+        *write_d_into_addr("LCL"),
+        # Goto retaddr
+        "@{}".format(ret_addr),
+        "A=M",
+        "0;JMP",
     ]
 
 
@@ -277,6 +290,22 @@ def get_addr(segment, offset):
         ins.append("AD=D+A")
 
     return ins
+
+
+def get_pointer_offset(ptr, offset):
+    """Set A to the value at ptr, plus offset.
+    """
+    if offset < 0:
+        offset = -offset
+        sign = "-"
+    else:
+        sign = "+"
+
+    return [
+        *deref_pointer_d(ptr),
+        "@{}".format(offset),
+        "A=D{}A".format(sign),
+    ]
 
 
 def deref_pointer_d(addr):
