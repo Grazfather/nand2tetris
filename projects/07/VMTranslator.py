@@ -77,16 +77,17 @@ def translate_command(command):
 
 
 def main(filepath):
+    asm = []
     if op.isdir(filepath):
         path = filepath
         module = op.basename(op.normpath(op.realpath(filepath)))
         files = glob.glob("{}/*.vm".format(filepath))
+        asm.extend(translations.bootstrap())
     else:
         path = op.dirname(filepath)
         module = op.splitext(op.basename(filepath))[0]
         files = [filepath]
 
-    asm = []
 
     for fn in files:
         # UGLY: Filename must communicated with the translator

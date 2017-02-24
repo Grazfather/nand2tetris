@@ -7,6 +7,19 @@ SEGMENT_MAP = {
 
 filename = ""
 count = 0
+current_function = ""
+
+
+def bootstrap():
+    """Boilerplate bootstrapping code.
+    """
+    return [
+        "@256",
+        "D=A",
+        "@SP",
+        "M=D",
+        *call_function("Sys.init", 0)
+    ]
 
 
 def push_command(command):
@@ -130,9 +143,16 @@ def label_command(command):
 
 
 def call_command(command):
-    return_label = "{}$RA_from_{}.{}".format(filename, command.arg1, count)
+    func = command.arg1
     num_args = int(command.arg2)
 
+    return [
+        *call_function(func, num_args)
+    ]
+
+
+def call_function(function, num_args):
+    return_label = "{}$ret.{}".format(current_function, count)
     return [
         # Save old state
         # -- Push RA
@@ -159,13 +179,15 @@ def call_command(command):
         *write_d_into_addr("LCL"),
 
         # Jump to function
-        *jmp_address(command.arg1),
+        *jmp_address(function),
         *add_label(return_label),
     ]
 
 
 def function_command(command):
+    global current_function
     name = command.arg1
+    current_function = name
     num_locals = int(command.arg2)
     return [
         *add_label(name),
@@ -348,7 +370,7 @@ def push_register(addr):
     """Push the value stored in register as addr.
     """
     return [
-        *deref_pointer_d("ARG"),
+        *deref_pointer_d(addr),
         *push_d(),
     ]
 
