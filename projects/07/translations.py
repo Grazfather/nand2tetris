@@ -9,48 +9,6 @@ filename = ""
 count = 0
 
 
-def get_addr(segment, offset):
-    """Return instructions to set both A and D to the address specified by
-    the segment and offset provided.
-    """
-    ins = []
-    # Get target address
-    # -- Get base
-    if segment in SEGMENT_MAP:
-        segment = SEGMENT_MAP[segment]
-        ins.extend(deref_pointer(segment))
-    else:
-        if segment == "pointer":
-            ins.append("@3")
-        elif segment == "temp":
-            ins.append("@5")
-        elif segment == "static":
-            ins.append("@{}.{}".format(filename, offset))
-
-        ins.append("D=A")
-
-    if offset:
-        ins.append("@{}".format(offset))
-        ins.append("AD=D+A")
-
-    return ins
-
-
-def deref_pointer(base):
-    return [
-        "@{}".format(base),
-        "D=M",
-    ]
-
-
-def push_constant(value):
-    return [
-        "@{}".format(value),
-        "D=A",
-        *push_d(),
-    ]
-
-
 def push_command(command):
     if command.arg1 == "constant":
         return push_constant(command.arg2)
@@ -79,7 +37,7 @@ def pop_command(command):
     ]
 
 
-def add_command(command):
+def add_command(_):
     return [
         # Pop second arg into temp
         *pop_into_addr("R13"),
@@ -92,7 +50,7 @@ def add_command(command):
     ]
 
 
-def sub_command(command):
+def sub_command(_):
     return [
         # Pop second arg into temp
         *pop_into_addr("R14"),
@@ -105,7 +63,7 @@ def sub_command(command):
     ]
 
 
-def neg_command(command):
+def neg_command(_):
     return [
         *pop_into_addr("R13"),
         "D=-D",
@@ -122,8 +80,8 @@ def cmp_command(comparison, command):
         "@13",
         "D=D-M",
         "@{}".format(true_label),
-        "D;J{}".format(comparison), # If equal, set D to 0xFFFF
-        "D=0", # Otherwise, set D to 0
+        "D;J{}".format(comparison),  # If equal, set D to 0xFFFF
+        "D=0",  # Otherwise, set D to 0
         "@{}".format(end_label),
         "0;JMP",
         "({})".format(true_label),
@@ -133,7 +91,7 @@ def cmp_command(comparison, command):
     ]
 
 
-def boolean_command(op, command):
+def boolean_command(op, _):
     return [
         *pop_into_addr("R13"),
         *pop_into_addr("R14"),
@@ -143,7 +101,7 @@ def boolean_command(op, command):
     ]
 
 
-def not_command(command):
+def not_command(_):
     return [
         *pop_into_addr("R13"),
         "D=!D",
@@ -153,8 +111,7 @@ def not_command(command):
 
 def goto_command(command):
     return [
-        "@{}".format(command.arg1),
-        "0;JMP",
+        *jmp_address(command.arg1),
     ]
 
 
@@ -168,13 +125,168 @@ def if_goto_command(command):
 
 def label_command(command):
     return [
-        "({})".format(command.arg1)
+        *add_label(command.arg1),
+    ]
+
+
+def call_command(command):
+    return_label = "{}$RA_from_{}.{}".format(filename, command.arg1, count)
+    num_args = int(command.arg2)
+
+    return [
+        # Save old state
+        # -- Push RA
+        *push_constant(return_label),
+        # -- Push LCL
+        *push_register("LCL"),
+        # -- Push ARG
+        *push_register("ARG"),
+        # -- Push THIS
+        *push_register("THIS"),
+        # -- Push THAT
+        *push_register("THAT"),
+        # Set new state
+        # -- Set ARG (ARG = SP - num_args - 5)
+        *deref_pointer_d("SP"),
+        "@5",
+        "D=D-A",
+        "@{}".format(num_args),
+        "D=D-A",
+        *write_d_into_addr("ARG"),
+
+        # -- Set LCL
+        *deref_pointer_d("SP"),
+        *write_d_into_addr("LCL"),
+
+        # Jump to function
+        *jmp_address(command.arg1),
+        *add_label(return_label),
+    ]
+
+
+def function_command(command):
+    name = command.arg1
+    num_locals = int(command.arg2)
+    return [
+        *add_label(name),
+        # Make room for locals
+        *(push_constant(0) * num_locals)
+    ]
+
+
+def return_command(_):
+    final_sp = "R13"
+    ret_addr = "R14"
+    return [
+        # Get return value, store over arg0
+        *pop_d(),  # RV in D
+        *deref_pointer_a("ARG"),
+        "M=D",  # Write RV
+        # Get SP (just after arg0 AKA return value)
+        *deref_pointer_d("ARG"),
+        *incr_d(),
+        *push_d(),
+        *pop_into_addr(final_sp),
+        # Remove the local frame
+        *deref_pointer_d("LCL"),
+        *push_d(),
+        *pop_into_addr("SP"),
+        # Restore caller context
+        *pop_into_addr("THAT"),
+        *pop_into_addr("THIS"),
+        *pop_into_addr("ARG"),
+        *pop_into_addr("LCL"),
+        *pop_into_addr(ret_addr),
+        # Fix SP
+        *deref_pointer_d(final_sp),
+        *push_d(),
+        *pop_into_addr("SP"),
+        *deref_pointer_d(ret_addr),
+        *jmp_d(),
+    ]
+
+
+def jmp_address(addr):
+    """Jump to the address or label specified.
+    """
+    return [
+        "@{}".format(addr),
+        "0;JMP",
+    ]
+
+
+def jmp_d():
+    """Jump to the address in D.
+    """
+    return [
+        "A=D",
+        "0;JMP",
+    ]
+
+
+def get_addr(segment, offset):
+    """Set A & D to the address specified by the segment and offset provided.
+    """
+    ins = []
+    # Get target address
+    # -- Get base
+    if segment in SEGMENT_MAP:
+        segment = SEGMENT_MAP[segment]
+        ins.extend(deref_pointer_d(segment))
+    else:
+        if segment == "pointer":
+            ins.append("@3")
+        elif segment == "temp":
+            ins.append("@5")
+        elif segment == "static":
+            ins.append("@{}.{}".format(filename, offset))
+
+        ins.append("D=A")
+
+    if offset:
+        ins.append("@{}".format(offset))
+        ins.append("AD=D+A")
+
+    return ins
+
+
+def deref_pointer_d(addr):
+    """Read value from addr and set D.
+    """
+    return [
+        "@{}".format(addr),
+        "D=M",
+    ]
+
+
+def deref_pointer_a(addr):
+    """Read value from addr and set A.
+    """
+    return [
+        "@{}".format(addr),
+        "A=M",
+    ]
+
+
+def deref_d():
+    """Read value from memory at D and set D.
+    """
+    return [
+        "A=D",
+        "D=M",
+    ]
+
+
+def incr_d():
+    """Increment D.
+    """
+    return [
+        "D=D+1",
     ]
 
 
 def pop_d():
-    """Return the list of instructions required to pop the top value of the
-    stack into the D register.
+    """Pop the top value from the stack into D.
     """
     return [
         "@SP",
@@ -184,18 +296,23 @@ def pop_d():
 
 
 def pop_into_addr(addr):
-    """Return the list of instructions required to pop the top value of the
-    stack into memory at the specified address.
+    """Pop value from stack and write to memory at addr.
     """
     return [
         *pop_d(),
+        *write_d_into_addr(addr),
+    ]
+
+def write_d_into_addr(addr):
+    """Write D into memory at addr.
+    """
+    return [
         "@{}".format(addr),
         "M=D",
     ]
 
 def push_d():
-    """Return the list of instructions required to push the D register onto
-    the stack.
+    """Push D onto the stack
     """
     return [
         # Increment SP
@@ -207,3 +324,35 @@ def push_d():
         "M=D",
     ]
 
+
+def push_a():
+    """Push A onto the stack.
+    """
+    return [
+        "D=A",
+        *push_d(),
+    ]
+
+
+def push_constant(value):
+    """Push value onto stack.
+    """
+    return [
+        "@{}".format(value),
+        *push_a(),
+    ]
+
+
+def push_register(addr):
+    """Push the value stored in register as addr.
+    """
+    return [
+        *deref_pointer_d("ARG"),
+        *push_d(),
+    ]
+
+
+def add_label(name):
+    """Add the named label.
+    """
+    return ["({})".format(name)]

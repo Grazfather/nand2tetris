@@ -12,6 +12,8 @@ Command = namedtuple("Command", "line type command arg1 arg2")
 
 ARITH_COMMANDS = {"add", "sub", "neg", "eq", "gt", "lt", "and", "or", "not"}
 MEM_COMMANDS = {"pop", "push"}
+BRANCH_COMMANDS = {"goto", "if-goto", "label"}
+
 COMMAND_MAP = {
     "add": translations.add_command,
     "sub": translations.sub_command,
@@ -27,6 +29,9 @@ COMMAND_MAP = {
     "goto": translations.goto_command,
     "if-goto": translations.if_goto_command,
     "label": translations.label_command,
+    "function": translations.function_command,
+    "call": translations.call_command,
+    "return": translations.return_command,
 }
 
 
@@ -44,9 +49,13 @@ def parse_line(line):
         return Command(line, "MEM", tokens[0], tokens[1], tokens[2])
     elif tokens[0] in ARITH_COMMANDS:
         return Command(line, "ARITH", tokens[0], None, None)
-    else:
+    elif tokens[0] in BRANCH_COMMANDS:
         return Command(line, "BRANCH", tokens[0], tokens[1], None)
-    # TODO: Add support for other command types
+    elif tokens[0] in {"function", "call"}:
+        return Command(line, "FUNC", tokens[0], tokens[1], tokens[2])
+    else:  # return
+        return Command(line, "FUNC", tokens[0], None, None)
+
 
 
 def translate_command(command):
