@@ -87,16 +87,6 @@ def cmp_command(comparison, command):
     ]
 
 
-def boolean_command(op, _):
-    return [
-        *pop_into_addr("R13"),
-        *pop_into_addr("R14"),
-        "@R13",
-        "D=D{}M".format(op),
-        *push_d(),
-    ]
-
-
 def not_command(_):
     return [
         *get_stack_top_addr(),
@@ -347,6 +337,7 @@ def pop_into_addr(addr):
         *write_d_into_addr(addr),
     ]
 
+
 def write_d_into_addr(addr):
     """Write D into memory at addr.
     """
@@ -355,6 +346,7 @@ def write_d_into_addr(addr):
         "M=D",
     ]
 
+
 def push_d():
     """Push D onto the stack
     """
@@ -362,7 +354,7 @@ def push_d():
         # Increment SP
         "@SP",
         "M=M+1",
-        # Stack is 'empty': SP points at open slot, so we need to get the old slot
+        # Stack is 'empty': SP points at open slot, so get the old slot
         "A=M-1",
         # write value
         "M=D",
