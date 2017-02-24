@@ -85,12 +85,12 @@ def neg_command(_):
 
 
 def cmp_command(comparison, command):
-    true_label = "{}_TRUE_{}".format(comparison, count)
-    end_label = "{}_END_{}".format(comparison, count)
+    true_label = label("{}_TRUE_{}".format(comparison, count))
+    end_label = label("{}_END_{}".format(comparison, count))
     return [
         *pop_into_addr("R13"),
         *pop_into_addr("R14"),
-        "@13",
+        "@R13",
         "D=D-M",
         "@{}".format(true_label),
         "D;J{}".format(comparison),  # If equal, set D to 0xFFFF
@@ -108,7 +108,7 @@ def boolean_command(op, _):
     return [
         *pop_into_addr("R13"),
         *pop_into_addr("R14"),
-        "@13",
+        "@R13",
         "D=D{}M".format(op),
         *push_d(),
     ]
@@ -124,22 +124,28 @@ def not_command(_):
 
 def goto_command(command):
     return [
-        *jmp_address(command.arg1),
+        *jmp_address(label(command.arg1)),
     ]
 
 
 def if_goto_command(command):
     return [
         *pop_d(),
-        "@{}".format(command.arg1),
+        "@{}".format(label(command.arg1)),
         "D;JNE",
     ]
 
 
 def label_command(command):
     return [
-        *add_label(command.arg1),
+        *add_label(label(command.arg1)),
     ]
+
+
+def label(label):
+    """Make a label unique to the function where it appaers.
+    """
+    return "{}${}".format(current_function, label)
 
 
 def call_command(command):
