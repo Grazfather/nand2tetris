@@ -4,12 +4,22 @@ SEGMENT_MAP = {
     "this": "THIS",
     "that": "THAT",
 }
+CALL_LABEL = "CALL"
 RETURN_LABEL = "RETURN"
+# Used for push
+PUSH_TEMP_REG = "R13"
+# Used for call
+ARGS_REG = "R14"
+FUNC_ADDR_REG = "R15"
+# Used for return
+END_FRAME_REG = "R14"
+RA_REG = "R15"
 
 filename = ""
 count = 0
 current_function = ""
 return_inserted = False
+call_inserted = False
 
 
 def bootstrap():
@@ -20,7 +30,7 @@ def bootstrap():
         "D=A",
         "@SP",
         "M=D",
-        *call_function("Sys.init", 0)
+        *insert_call("Sys.init", 0)
     ]
 
 
@@ -41,12 +51,12 @@ def pop_command(command):
         # -- Get address
         *get_addr(command.arg1, command.arg2),
         # -- Write it to register
-        "@R13",
+        "@{}".format(PUSH_TEMP_REG),
         "M=D",
         # Pop value into D
         *pop_d(),
         # Write D into address
-        "@R13",
+        "@{}".format(PUSH_TEMP_REG),
         "A=M",
         "M=D",
     ]
@@ -119,18 +129,45 @@ def label_command(command):
 def call_command(command):
     func = command.arg1
     num_args = int(command.arg2)
-
-    return [
-        *call_function(func, num_args)
-    ]
+    return insert_call(func, num_args)
 
 
-def call_function(function, num_args):
+def insert_call(func, num_args):
     return_label = "{}$ret.{}".format(current_function, count)
+    ins = [
+        # Save target address
+        "@{}".format(func),
+        "D=A",
+        "@{}".format(FUNC_ADDR_REG),
+        "M=D",
+        # Save num args
+        "@{}".format(num_args),
+        "D=A",
+        "@{}".format(ARGS_REG),
+        "M=D",
+        # Put the RA into D
+        "@{}".format(return_label),
+        "D=A",
+    ]
+    if call_inserted:
+        ins.extend(["@{}".format(CALL_LABEL), "0;JMP"])
+    else:
+        ins.extend(call_stub())
+
+    ins.extend(add_label(return_label))
+
+    return ins
+
+
+def call_stub():
+    """Set up the stack and jump to the function saved in a temp register."""
+    global call_inserted
+    call_inserted = True
     return [
+        *add_label(CALL_LABEL),
         # Save old state
-        # -- Push RA
-        *push_constant(return_label),
+        # -- Push RA (which was put into D first)
+        *push_d(),
         # -- Push LCL
         *push_register("LCL"),
         # -- Push ARG
@@ -144,17 +181,17 @@ def call_function(function, num_args):
         *deref_pointer_d("SP"),
         "@5",
         "D=D-A",
-        "@{}".format(num_args),
+        "@{}".format(ARGS_REG),
+        "A=M",
         "D=D-A",
         *write_d_into_addr("ARG"),
 
         # -- Set LCL
         *deref_pointer_d("SP"),
         *write_d_into_addr("LCL"),
-
         # Jump to function
-        *jmp_address(function),
-        *add_label(return_label),
+        *deref_pointer_a(FUNC_ADDR_REG),
+        "0;JMP",
     ]
 
 
@@ -173,7 +210,7 @@ def function_command(command):
 def return_command(_):
     """Jump to a return stub. If it hasn't been insterted yet, then insert it."""
     if not return_inserted:
-        return return_from_func()
+        return return_stub()
     else:
         return [
             "@{}".format(RETURN_LABEL),
@@ -368,21 +405,19 @@ def label(label):
     return "{}${}".format(current_function, label)
 
 
-def return_from_func():
+def return_stub():
     global return_inserted
     return_inserted = True
 
-    end_frame = "R13"
-    ret_addr = "R14"
     return [
         *add_label(RETURN_LABEL),
         # End frame = LCL
         *deref_pointer_d("LCL"),
-        *write_d_into_addr(end_frame),
+        *write_d_into_addr(END_FRAME_REG),
         # ret_addr = *(endFrame - 5)
         *get_pointer_offset("LCL", -5),
         "D=M",
-        *write_d_into_addr(ret_addr),
+        *write_d_into_addr(RA_REG),
         # ARG[0] = pop()
         *pop_d(),
         "@ARG",
@@ -395,23 +430,23 @@ def return_from_func():
         "@SP",
         "M=D",
         # Restore THAT
-        *get_pointer_offset(end_frame, -1),
+        *get_pointer_offset(END_FRAME_REG, -1),
         "D=M",
         *write_d_into_addr("THAT"),
         # Restore THIS
-        *get_pointer_offset(end_frame, -2),
+        *get_pointer_offset(END_FRAME_REG, -2),
         "D=M",
         *write_d_into_addr("THIS"),
         # Restore ARG
-        *get_pointer_offset(end_frame, -3),
+        *get_pointer_offset(END_FRAME_REG, -3),
         "D=M",
         *write_d_into_addr("ARG"),
         # Restore LCL
-        *get_pointer_offset(end_frame, -4),
+        *get_pointer_offset(END_FRAME_REG, -4),
         "D=M",
         *write_d_into_addr("LCL"),
         # Goto retaddr
-        "@{}".format(ret_addr),
+        "@{}".format(RA_REG),
         "A=M",
         "0;JMP",
     ]
