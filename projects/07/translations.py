@@ -4,10 +4,12 @@ SEGMENT_MAP = {
     "this": "THIS",
     "that": "THAT",
 }
+RETURN_LABEL = "RETURN"
 
 filename = ""
 count = 0
 current_function = ""
+return_inserted = False
 
 
 def bootstrap():
@@ -169,48 +171,14 @@ def function_command(command):
 
 
 def return_command(_):
-    end_frame = "R13"
-    ret_addr = "R14"
-    return [
-        # End frame = LCL
-        *deref_pointer_d("LCL"),
-        *write_d_into_addr(end_frame),
-        # ret_addr = *(endFrame - 5)
-        *get_pointer_offset("LCL", -5),
-        "D=M",
-        *write_d_into_addr(ret_addr),
-        # ARG[0] = pop()
-        *pop_d(),
-        "@ARG",
-        "A=M",
-        "M=D",
-        # SP = ARG + 1
-        "@ARG",
-        "D=M",
-        "D=D+1",
-        "@SP",
-        "M=D",
-        # Restore THAT
-        *get_pointer_offset(end_frame, -1),
-        "D=M",
-        *write_d_into_addr("THAT"),
-        # Restore THIS
-        *get_pointer_offset(end_frame, -2),
-        "D=M",
-        *write_d_into_addr("THIS"),
-        # Restore ARG
-        *get_pointer_offset(end_frame, -3),
-        "D=M",
-        *write_d_into_addr("ARG"),
-        # Restore LCL
-        *get_pointer_offset(end_frame, -4),
-        "D=M",
-        *write_d_into_addr("LCL"),
-        # Goto retaddr
-        "@{}".format(ret_addr),
-        "A=M",
-        "0;JMP",
-    ]
+    """Jump to a return stub. If it hasn't been insterted yet, then insert it."""
+    if not return_inserted:
+        return return_from_func()
+    else:
+        return [
+            "@{}".format(RETURN_LABEL),
+            "0;JMP",
+        ]
 
 
 def jmp_address(addr):
@@ -398,3 +366,52 @@ def label(label):
     """Make a label unique to the function where it appears.
     """
     return "{}${}".format(current_function, label)
+
+
+def return_from_func():
+    global return_inserted
+    return_inserted = True
+
+    end_frame = "R13"
+    ret_addr = "R14"
+    return [
+        *add_label(RETURN_LABEL),
+        # End frame = LCL
+        *deref_pointer_d("LCL"),
+        *write_d_into_addr(end_frame),
+        # ret_addr = *(endFrame - 5)
+        *get_pointer_offset("LCL", -5),
+        "D=M",
+        *write_d_into_addr(ret_addr),
+        # ARG[0] = pop()
+        *pop_d(),
+        "@ARG",
+        "A=M",
+        "M=D",
+        # SP = ARG + 1
+        "@ARG",
+        "D=M",
+        "D=D+1",
+        "@SP",
+        "M=D",
+        # Restore THAT
+        *get_pointer_offset(end_frame, -1),
+        "D=M",
+        *write_d_into_addr("THAT"),
+        # Restore THIS
+        *get_pointer_offset(end_frame, -2),
+        "D=M",
+        *write_d_into_addr("THIS"),
+        # Restore ARG
+        *get_pointer_offset(end_frame, -3),
+        "D=M",
+        *write_d_into_addr("ARG"),
+        # Restore LCL
+        *get_pointer_offset(end_frame, -4),
+        "D=M",
+        *write_d_into_addr("LCL"),
+        # Goto retaddr
+        "@{}".format(ret_addr),
+        "A=M",
+        "0;JMP",
+    ]
