@@ -1,0 +1,46 @@
+/** Dragon fractal
+*/
+class Dragon {
+    function void draw(int level) {
+        var int ax, ay, bx, by, cx, cy;
+        do Screen.setColor(true);
+        let ax = 250;
+        let ay = 100;
+        let bx = 350;
+        let by = 200;
+        let cx = 450;
+        let cy = 100;
+        do Dragon.drawDragon(ax, ay, bx, by, cx, cy, level);
+        return;
+    }
+
+    function void drawDragon(int x1, int y1, int x2, int y2, int x3, int y3, int level) {
+        var int x4, y4;
+        var int ix, iy;
+        var int jx, jy;
+        // Base base:
+        if (level = 1) {
+            do Screen.drawLine(x1, y1, x2, y2);
+            do Screen.drawLine(x2, y2, x3, y3);
+        }
+        else {
+            let level = level - 1;
+            // Find the two new center points
+            // Make fake point 4
+            let x4 = x1 - (x3 - x2);
+            let y4 = y1 - (y3 - y2);
+            let ix = Dragon.mid(x2, x4);
+            let iy = Dragon.mid(y2, y4);
+            let jx = Dragon.mid(x1, x3);
+            let jy = Dragon.mid(y1, y3);
+            do Dragon.drawDragon(x1, y1, ix, iy, x2, y2, level);
+            do Dragon.drawDragon(x3, y3, jx, jy, x2, y2, level);
+        }
+        return;
+    }
+
+    function int mid(int a, int b)
+    {
+        return (a + ((b - a)/2));
+    }
+}

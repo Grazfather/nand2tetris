@@ -1,0 +1,38 @@
+/** Sierpinski carpet fractal
+*/
+class Sierpinski {
+    function void draw(int level) {
+        // Draw background
+        do Screen.setColor(true);
+        do Screen.drawRectangle(200, 0, 455, 255);
+        // Set colour to white
+        do Screen.setColor(false);
+        do Sierpinski.drawCarpet(200, 0, 455, 255, level);
+        return;
+    }
+
+    function void drawCarpet(int xa, int ya, int xb, int yb, int level) {
+        var int third;
+        // Draw center rectangle
+        let third = (xb - xa)/3;
+        do Screen.drawRectangle(xa + third, ya + third, xb - third, yb - third);
+        // Base case
+        if (level = 1) {
+            return;
+        } else {
+            let level = level - 1;
+            // First row
+            do Sierpinski.drawCarpet(xa, ya, xa + third, ya + third, level);
+            do Sierpinski.drawCarpet(xa + (third), ya, xa + (2*third), ya + third, level);
+            do Sierpinski.drawCarpet(xa + (2*third), ya, xa + (3*third), ya + third, level);
+            // Second row
+            do Sierpinski.drawCarpet(xa, ya + (third), xa + (third), ya + (2*third), level);
+            do Sierpinski.drawCarpet(xa + (2*third), ya + (third), xa + (3*third), ya + (2*third), level);
+            // Third row
+            do Sierpinski.drawCarpet(xa , ya + (2*third), xa + (third), ya + (3*third), level);
+            do Sierpinski.drawCarpet(xa + (third), ya + (2*third), xa + (2*third), ya + (3*third), level);
+            do Sierpinski.drawCarpet(xa + (2*third), ya + (2*third), xa + (3*third), ya + (3*third), level);
+        }
+        return;
+    }
+}

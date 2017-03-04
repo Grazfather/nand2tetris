@@ -1,0 +1,117 @@
+/** Qudratic Koch Snowflake fractal
+*/
+class Koch {
+    function void draw(int level) {
+        var int ax, ay, bx, by, cx, cy, dx, dy;
+        var int len;
+        do Screen.setColor(true);
+        // Line cannot be longer than 180 pixels otherwise the length will overflow
+        let len = 128;
+        let ax = 200 + 64;
+        let ay = 64;
+        let bx = ax + len;
+        let by = ay;
+        let cx = bx;
+        let cy = by + len;
+        let dx = cx - len;
+        let dy = cy;
+        do Koch.drawKochLine(ax, ay, bx, by, level);
+        do Koch.drawKochLine(bx, by, cx, cy, level);
+        do Koch.drawKochLine(cx, cy, dx, dy, level);
+        do Koch.drawKochLine(dx, dy, ax, ay, level);
+        return;
+    }
+
+    function void drawKochLine(int x1, int y1, int x2, int y2, int level) {
+        var int len;
+        // Base base:
+        if (level = 1) {
+            do Screen.drawLine(x1, y1, x2, y2);
+        } else {
+            let level = level - 1;
+            // Split into EIGHT lines
+            /*
+                 __
+              __|  |   __
+                   |__|
+            */
+            let len = Math.sqrt(((x2 - x1)*(x2 - x1)) + ((y2 - y1)*(y2 - y1)))/4;
+            // 'lazily' handling four cases: N E S W
+            // It's easier and more accurate than doing trip with integer math
+            if (x1 = x2) { // North or South
+                if (y1 < y2) { // South
+                    do Koch.drawKochLine(x1, y1,
+                                         x1, y1 + len, level);
+                    do Koch.drawKochLine(x1, y1 + len,
+                                         x1 + len, y1 + len, level);
+                    do Koch.drawKochLine(x1 + len, y1 + len,
+                                         x1 + len, y1 + (2 * len), level);
+                    do Koch.drawKochLine(x1 + len, y1 + (2 * len),
+                                         x1, y1 + (2 * len), level);
+                    do Koch.drawKochLine(x1, y1 + (2 * len),
+                                         x1 - len, y1 + (2 * len), level);
+                    do Koch.drawKochLine(x1 - len, y1 + (2 * len),
+                                         x1 - len, y1 + (3 * len), level);
+                    do Koch.drawKochLine(x1 - len, y1 + (3 * len),
+                                         x1, y1 + (3 * len), level);
+                    do Koch.drawKochLine(x1, y1 + (3 * len),
+                                         x1, y1 + (4 * len), level);
+                } else { // North
+                    do Koch.drawKochLine(x1, y1,
+                                         x1, y1 - len, level);
+                    do Koch.drawKochLine(x1, y1 - len,
+                                         x1 - len, y1 - len, level);
+                    do Koch.drawKochLine(x1 - len, y1 - len,
+                                         x1 - len, y1 - (2 * len), level);
+                    do Koch.drawKochLine(x1 - len, y1 - (2 * len),
+                                         x1, y1 - (2 * len), level);
+                    do Koch.drawKochLine(x1, y1 - (2 * len),
+                                         x1 + len, y1 - (2 * len), level);
+                    do Koch.drawKochLine(x1 + len, y1 - (2 * len),
+                                         x1 + len, y1 - (3 * len), level);
+                    do Koch.drawKochLine(x1 + len, y1 - (3 * len),
+                                         x1, y1 - (3 * len), level);
+                    do Koch.drawKochLine(x1, y1 - (3 * len),
+                                         x1, y1 - (4 * len), level);
+                }
+            } else { // East or West
+                if (x1 > x2) { // West
+                    do Koch.drawKochLine(x1, y1,
+                                         x1 - len, y1, level);
+                    do Koch.drawKochLine(x1 - len, y1,
+                                         x1 - len, y1 + len, level);
+                    do Koch.drawKochLine(x1 - len, y1 + len,
+                                         x1 - (2 * len), y1 + len, level);
+                    do Koch.drawKochLine(x1 - (2 * len), y1 + len,
+                                         x1 - (2 * len), y1, level);
+                    do Koch.drawKochLine(x1 - (2 * len), y1,
+                                         x1 - (2 * len), y1 - len, level);
+                    do Koch.drawKochLine(x1 - (2 * len), y1 - len,
+                                         x1 - (3 * len), y1 - len, level);
+                    do Koch.drawKochLine(x1 - (3 * len), y1 - len,
+                                         x1 - (3 * len), y1, level);
+                    do Koch.drawKochLine(x1 - (3 * len), y1,
+                                         x1 - (4 * len), y1, level);
+                } else { // East
+                    do Koch.drawKochLine(x1, y1,
+                                         x1 + len, y1, level);
+                    do Koch.drawKochLine(x1 + len, y1,
+                                         x1 + len, y1 - len, level);
+                    do Koch.drawKochLine(x1 + len, y1 - len,
+                                         x1 + (2 * len), y1 - len, level);
+                    do Koch.drawKochLine(x1 + (2 * len), y1 - len,
+                                         x1 + (2 * len), y1, level);
+                    do Koch.drawKochLine(x1 + (2 * len), y1,
+                                         x1 + (2 * len), y1 + len, level);
+                    do Koch.drawKochLine(x1 + (2 * len), y1 + len,
+                                         x1 + (3 * len), y1 + len, level);
+                    do Koch.drawKochLine(x1 + (3 * len), y1 + len,
+                                         x1 + (3 * len), y1, level);
+                    do Koch.drawKochLine(x1 + (3 * len), y1,
+                                         x1 + (4 * len), y1, level);
+                }
+            }
+        }
+        return;
+    }
+}

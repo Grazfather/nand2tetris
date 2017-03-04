@@ -1,0 +1,8 @@
+class Main {
+    static Display disp; // Display singleton
+    function void main() {
+        let disp = Display.new();
+        do disp.run();
+        return;
+    }
+}
