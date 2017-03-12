@@ -4,6 +4,8 @@ import re
 import sys
 import xml.etree.ElementTree as ET
 
+import compilation_engine
+
 COMMENT_RE = r"(?P<comment>/\*.+?\*/|//.+?$)"
 KEYWORDS = [
     "class", "constructor", "function", "method", "field",
@@ -50,19 +52,25 @@ def main(filepath):
         files = [filepath]
 
     for fn in files:
+        classname = op.splitext(op.basename(op.normpath(op.realpath(fn))))[0]
         # Read in lines
         tokenizer = Tokenizer(fn)
+
+        # Create tokens XML
         root = ET.Element('tokens')
         lex = tokenizer.lex()
         for typ, token in lex:
             ET.SubElement(root, typ).text=token
-        # xml = CompilationEngine.compile(tokenizer)
 
         # Write a new xml file
-        classname = op.splitext(op.basename(op.normpath(op.realpath(fn))))[0]
         tree = ET.ElementTree(root)
         # For now save them in the current dir
         tree.write("{}T.xml".format(classname))
+
+        # Now create the parser xml
+        root = compilation_engine.dispatch_compile(tokenizer.lex())
+        tree = ET.ElementTree(root)
+        tree.write("{}.xml".format(classname))
 
 
 if __name__ == "__main__":
