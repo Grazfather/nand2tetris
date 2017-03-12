@@ -3,6 +3,7 @@ from os import path as op
 import re
 import sys
 import xml.etree.ElementTree as ET
+import collections
 
 import compilation_engine
 
@@ -35,11 +36,31 @@ class Tokenizer():
         for m in re.finditer(JACK_TOKEN_RE, self._code, re.MULTILINE | re.DOTALL):
             name = m.lastgroup
             if name != "comment":
+                print("Type: {} value {}".format(name, m.group(name)))
                 yield name, m.group(name)
+
+
+class PeekaheadIterator():
+    def __init__(self, it):
+        self.it = it
+        self.items = collections.deque()
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if self.items:
+            return self.items.popleft()
+        return next(self.it)
+
+    def pushback(self, *items):
+        self.items.extendleft(items)
 
     def peek(self):
         """Return the next token without removing it."""
-        pass
+        item = next(self)
+        self.pushback(item)
+        return item
 
 
 def main(filepath):
@@ -68,9 +89,14 @@ def main(filepath):
         tree.write("{}T.xml".format(classname))
 
         # Now create the parser xml
-        root = compilation_engine.dispatch_compile(tokenizer.lex())
+        root = compilation_engine.dispatch_compile(PeekaheadIterator(tokenizer.lex()))
         tree = ET.ElementTree(root)
         tree.write("{}.xml".format(classname))
+        # HACK: Their compare script is broken, need to post-process to match
+        with open("{}.xml".format(classname), "r") as f:
+            x = f.read().replace("><", ">\n<")
+        with open("{}.xml".format(classname), "w") as f:
+            f.write(x)
 
 
 if __name__ == "__main__":

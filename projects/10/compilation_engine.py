@@ -2,6 +2,9 @@ import xml.etree.ElementTree as ET
 
 TYPES = {"int", "char", "boolean", "void"}
 IDENTIFIER_KEYWORDS = {"this"}
+INFIX_OPS = {"+", "-", "*", "/", "&", "|", "<", ">", "="}
+UNARY_OPS = {"-", "~"}
+KEYWORD_CONSTANTS = {"true", "false", "null", "this"}
 
 
 class JackSyntaxError(Exception):
@@ -11,6 +14,11 @@ class JackSyntaxError(Exception):
 def expect(token, value):
     if token[1] != value:
         raise JackSyntaxError("Expected '{}', got '{}'".format(value, token[1]))
+
+
+def expect_type(token, value):
+    if token[0] != value:
+        raise JackSyntaxError("Expected type '{}', got '{}'".format(value, token[0]))
 
 
 def dispatch_compile(tokengen):
@@ -72,7 +80,6 @@ def compile_subroutine(t, tokengen):
     ('constructor' | 'function' | 'method') ('void' | type) subroutineName '(' parameterList ')'
     subroutineBody
     """
-    print("subroutine {}".format(t))
     root = ET.Element("subroutineDec")
     # constructor, function, or method
     node = ET.SubElement(root, "keyword")
@@ -229,7 +236,6 @@ def compile_do(t, tokengen):
     'do' subroutineCall ';'
          subroutineName '(' expressionList ')' | (className | varName) '.' subroutineName '(' expressionList ')'
     """
-    print("In compile do {}".format(t))
     root = ET.Element("doStatement")
     # let keyword
     expect(t, "do")
@@ -260,10 +266,8 @@ def compile_do(t, tokengen):
     t = next(tokengen)
 
     # expressionList
-    # TODO: Handle expressions
     t, node = compile_expression_list(t, tokengen)
     root.append(node)
-    while t[1] != ")": t = next(tokengen)
 
     # ')' symbol
     expect(t, ")")
@@ -300,9 +304,8 @@ def compile_let(t, tokengen):
         node.text = t[1]
         t = next(tokengen)
         # single expression
-        node = compile_expression(t, tokengen)
+        t, node = compile_expression(t, tokengen)
         root.append(node)
-        t = next(tokengen)
         # ']' symbol
         expect(t, "]")
         node = ET.SubElement(root, "symbol")
@@ -314,9 +317,8 @@ def compile_let(t, tokengen):
     node.text = t[1]
     t = next(tokengen)
     # single expression
-    node = compile_expression(t, tokengen)
+    t, node = compile_expression(t, tokengen)
     root.append(node)
-    t = next(tokengen)
     # ';'
     expect(t, ";")
     node = ET.SubElement(root, "symbol")
@@ -340,9 +342,8 @@ def compile_while(t, tokengen):
     node.text = t[1]
     t = next(tokengen)
     # single expression
-    node = compile_expression(t, tokengen)
+    t, node = compile_expression(t, tokengen)
     root.append(node)
-    t = next(tokengen)
     # ')' symbol
     node = ET.SubElement(root, "symbol")
     node.text = t[1]
@@ -353,11 +354,14 @@ def compile_while(t, tokengen):
     node.text = t[1]
     t = next(tokengen)
     # statements
+    t, node = compile_statements(t, tokengen)
+    root.append(node)
     # '}' symbol
     expect(t, "}")
     node = ET.SubElement(root, "symbol")
     node.text = t[1]
-    t = next(tokengen)
+
+    return root
 
 
 def compile_return(t, tokengen):
@@ -371,9 +375,8 @@ def compile_return(t, tokengen):
     t = next(tokengen)
     # 1 or 0 expressions
     if t[1] != ";":
-        node = compile_expression(t, tokengen)
+        t, node = compile_expression(t, tokengen)
         root.append(node)
-        t = next(tokengen)
     # Semicolon
     node = ET.SubElement(root, "symbol")
     node.text = t[1]
@@ -398,12 +401,34 @@ def compile_if(t, tokengen):
     node.text = t[1]
     t = next(tokengen)
     # single expression
-    node = compile_expression(t, tokengen)
+    t, node = compile_expression(t, tokengen)
     root.append(node)
-    t = next(tokengen)
     # ')' symbol
     expect(t, ")")
     node = ET.SubElement(root, "symbol")
+    node.text = t[1]
+    t = next(tokengen)
+    # '{' symbol
+    expect(t, "{")
+    node = ET.SubElement(root, "symbol")
+    node.text = t[1]
+    t = next(tokengen)
+    # statements
+    t, node = compile_statements(t, tokengen)
+    root.append(node)
+    # '}' symbol
+    expect(t, "}")
+    node = ET.SubElement(root, "symbol")
+    node.text = t[1]
+
+    tp = tokengen.peek()
+    if tp[1] != "else":
+        return root
+
+    t = next(tokengen)
+    # else keyword
+    expect(t, "else")
+    node = ET.SubElement(root, "keyword")
     node.text = t[1]
     t = next(tokengen)
     # '{' symbol
@@ -442,21 +467,121 @@ def compile_statements(t, tokengen):
 
 
 def compile_statement(t, tokengen):
-    print("statement {}".format(t))
     return STATEMENT_TYPES[t[1]](t, tokengen)
 
 
-def compile_term(tokengen):
+def compile_term(t, tokengen):
     """
+    integerConstant | stringConstant | keywordConstant |
+    varName | varName '[' expression ']' | subroutineCall |
+    '(' expression ')' | unaryOp term
+    This has to do a look ahead to distinguish between:
+    varName
+    varName '[' expression ']'
+    subroutine call:
+      subroutineName '(' expressionList ')' |
+      (className | varName) '.' subroutineName '(' expressionList ')'
     """
-    # This has to do a look ahead to distinguish between:
-    # varName
-    # varName '[' expression ']'
-    # subroutine call:
-    #   subroutineName '(' expressionList ')' |
-    #   (className | varName) '.' subroutineName '(' expressionList ')'
-    pass
-    # Include subroutine calls here
+    root = ET.Element("term")
+    if t[0] in {"integerConstant", "stringConstant"}:
+        node = ET.SubElement(root, t[0])
+        node.text = t[1]
+    elif t[1] in KEYWORD_CONSTANTS:
+        node = ET.SubElement(root, "keyword")
+        node.text = t[1]
+    elif t[1] in UNARY_OPS:
+        node = ET.SubElement(root, "symbol")
+        node.text = t[1]
+        t = next(tokengen)
+        node = compile_term(t, tokengen)
+        root.append(node)
+    elif t[1] == "(":
+        # '(' symbol
+        expect(t, "(")
+        node = ET.SubElement(root, "symbol")
+        node.text = t[1]
+        t = next(tokengen)
+
+        # expression
+        t, node = compile_expression(t, tokengen)
+        root.append(node)
+
+        # ')' symbol
+        expect(t, ")")
+        node = ET.SubElement(root, "symbol")
+        node.text = t[1]
+        # t = next(tokengen)
+    else:  # an identifier, with either possibly a call or indexing
+        expect_type(t, "identifier")
+        node = ET.SubElement(root, "identifier")
+        node.text = t[1]
+        tp = tokengen.peek()
+        if tp[1] == ".":  # Method call
+            t = next(tokengen)
+            # -- '.' symbol
+            expect(t, ".")
+            node = ET.SubElement(root, "symbol")
+            node.text = t[1]
+            t = next(tokengen)
+            # subroutineName
+            node = ET.SubElement(root, "identifier")
+            node.text = t[1]
+            t = next(tokengen)
+
+            # '(' symbol
+            expect(t, "(")
+            node = ET.SubElement(root, "symbol")
+            node.text = t[1]
+            t = next(tokengen)
+
+            # expressionList
+            t, node = compile_expression_list(t, tokengen)
+            root.append(node)
+
+            # ')' symbol
+            expect(t, ")")
+            node = ET.SubElement(root, "symbol")
+            node.text = t[1]
+            # t = next(tokengen)
+        elif tp[1] == "[":  # Array access
+            t = next(tokengen)
+            # '[' symbol
+            expect(t, "[")
+            node = ET.SubElement(root, "symbol")
+            node.text = t[1]
+            t = next(tokengen)
+
+            # expression
+            t, node = compile_expression(t, tokengen)
+            root.append(node)
+
+            # ']' symbol
+            expect(t, "]")
+            node = ET.SubElement(root, "symbol")
+            node.text = t[1]
+            # t = next(tokengen)
+        elif tp[1] == "(":  # Function call
+            t = next(tokengen)
+            # '(' symbol
+            expect(t, "(")
+            node = ET.SubElement(root, "symbol")
+            node.text = t[1]
+            t = next(tokengen)
+
+            # expressionList
+            t, node = compile_expression_list(t, tokengen)
+            root.append(node)
+
+            # ')' symbol
+            expect(t, ")")
+            node = ET.SubElement(root, "symbol")
+            node.text = t[1]
+            # t = next(tokengen)
+        else:  # Just a reference
+			# In this case we DON'T pop the peeked token
+            pass
+
+    return root
 
 
 def compile_expression_list(t, tokengen):
@@ -465,19 +590,16 @@ def compile_expression_list(t, tokengen):
     """
     root = ET.Element("expressionList")
     root.text = "\n"
-    # TODO: For now these are all identifiers or keywords
-    while t[0] == "identifier" or t[1] in IDENTIFIER_KEYWORDS:
-        node = compile_expression(t, tokengen)
+    while t[1] != ")":
+        t, node = compile_expression(t, tokengen)
         root.append(node)
-        t = next(tokengen)
         while t[1] == ",":
             # comma symbol
             node = ET.SubElement(root, "symbol")
             node.text = t[1]
             t = next(tokengen)
-            node = compile_expression(t, tokengen)
+            t, node = compile_expression(t, tokengen)
             root.append(node)
-            t = next(tokengen)
 
     return t, root
 
@@ -487,13 +609,19 @@ def compile_expression(t, tokengen):
     term (op term)*
     """
     root = ET.Element("expression")
-    # TODO: Do this last: There are test files that have no expressions.
-    # For now assume it has a single term that is an identifier
-    term = ET.SubElement(root, "term")
-    if t[1] in IDENTIFIER_KEYWORDS:
-        node = ET.SubElement(term, "keyword")
-    else:
-        node = ET.SubElement(term, "identifier")
-    node.text = t[1]
+    # term
+    node = compile_term(t, tokengen)
+    root.append(node)
+    t = next(tokengen)
+    while t[1] in INFIX_OPS:
+        # op
+        node = ET.SubElement(root, "symbol")
+        node.text = t[1]
+        t = next(tokengen)
+        # term
+        node = compile_term(t, tokengen)
+        root.append(node)
+        t = next(tokengen)
 
-    return root
+
+    return t, root
