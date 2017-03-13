@@ -36,7 +36,6 @@ class Tokenizer():
         for m in re.finditer(JACK_TOKEN_RE, self._code, re.MULTILINE | re.DOTALL):
             name = m.lastgroup
             if name != "comment":
-                print("Type: {} value {}".format(name, m.group(name)))
                 yield name, m.group(name)
 
 
@@ -95,7 +94,7 @@ def main(filepath):
         # HACK: Their compare script is broken, need to post-process to match
         with open("{}.xml".format(classname), "r") as f:
             x = f.read().replace("><", ">\n<")
-        with open("{}.xml".format(classname), "w") as f:
+        with open(op.join(path, "{}.xml".format(classname)), "w") as f:
             f.write(x)
 
 
