@@ -6,7 +6,7 @@ import sys
 import xml.etree.ElementTree as ET
 
 from tokenizer import Tokenizer
-import compilation_engine
+import analyzer_engine
 
 
 class PeekaheadIterator():
@@ -58,7 +58,7 @@ def main(filepath):
         tree.write("{}T.xml".format(classname))
 
         # Now create the parser xml
-        root = compilation_engine.dispatch_compile(PeekaheadIterator(tokenizer.lex()))
+        root = analyzer_engine.dispatch_compile(PeekaheadIterator(tokenizer.lex()))
         tree = ET.ElementTree(root)
         tree.write("{}.xml".format(classname))
         # HACK: Their compare script is broken, need to post-process to match
