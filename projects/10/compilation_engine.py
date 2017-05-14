@@ -122,11 +122,6 @@ def compile_subroutine_body(t, tokengen):
         t = next(tokengen)
     t, node = compile_statements(t, tokengen)
     root.append(node)
-    # while t[1] != '}': # TODO: Better test?
-        # node = compile_statement(t, tokengen)
-        # root.append(node)
-        # t = next(tokengen)
-    # '}'
     expect(t, "}")
     node = ET.SubElement(root, "symbol")
     node.text = t[1]
@@ -510,7 +505,6 @@ def compile_term(t, tokengen):
         expect(t, ")")
         node = ET.SubElement(root, "symbol")
         node.text = t[1]
-        # t = next(tokengen)
     else:  # an identifier, with either possibly a call or indexing
         expect_type(t, "identifier")
         node = ET.SubElement(root, "identifier")
@@ -542,7 +536,6 @@ def compile_term(t, tokengen):
             expect(t, ")")
             node = ET.SubElement(root, "symbol")
             node.text = t[1]
-            # t = next(tokengen)
         elif tp[1] == "[":  # Array access
             t = next(tokengen)
             # '[' symbol
@@ -559,7 +552,6 @@ def compile_term(t, tokengen):
             expect(t, "]")
             node = ET.SubElement(root, "symbol")
             node.text = t[1]
-            # t = next(tokengen)
         elif tp[1] == "(":  # Function call
             t = next(tokengen)
             # '(' symbol
@@ -578,7 +570,7 @@ def compile_term(t, tokengen):
             node.text = t[1]
             # t = next(tokengen)
         else:  # Just a reference
-			# In this case we DON'T pop the peeked token
+            # In this case we DON'T pop the peeked token
             pass
 
     return root
@@ -622,6 +614,5 @@ def compile_expression(t, tokengen):
         node = compile_term(t, tokengen)
         root.append(node)
         t = next(tokengen)
-
 
     return t, root
