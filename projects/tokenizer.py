@@ -1,4 +1,5 @@
 import re
+from collections import namedtuple
 
 COMMENT_RE = r"(?P<comment>/\*.+?\*/|//.+?$)"
 KEYWORDS = [
@@ -18,6 +19,7 @@ STRING_RE = r"(?<!\\)\"(?P<stringConstant>[^\n]+?)(?<!\\)\""
 INTEGER_RE = r"(?P<integerConstant>\b\d+\b)"
 JACK_TOKEN_RE = r"|".join([COMMENT_RE, KEYWORD_RE, IDENTIFIER_RE, SYMBOL_RE, STRING_RE, INTEGER_RE])
 
+Token = namedtuple("Token", "type, value")
 
 class Tokenizer():
     def __init__(self, filename):
@@ -26,8 +28,8 @@ class Tokenizer():
         self._cleancode = ""
 
     def lex(self):
-        """Yield tuple pairs (<type>, <value>)."""
+        """Yield Tokens: Token(<type>, <value>)."""
         for m in re.finditer(JACK_TOKEN_RE, self._code, re.MULTILINE | re.DOTALL):
-            name = m.lastgroup
-            if name != "comment":
-                yield name, m.group(name)
+            typ = m.lastgroup
+            if typ != "comment":
+                yield Token(typ, m.group(typ))
