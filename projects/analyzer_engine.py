@@ -120,8 +120,9 @@ def compile_subroutine_body(t, tokengen):
         node = compile_vardec(t, tokengen)
         root.append(node)
         t = next(tokengen)
-    t, node = compile_statements(t, tokengen)
+    node = compile_statements(t, tokengen)
     root.append(node)
+    t = next(tokengen)
     expect(t, "}")
     node = ET.SubElement(root, "symbol")
     node.text = t[1]
@@ -261,8 +262,9 @@ def compile_do(t, tokengen):
     t = next(tokengen)
 
     # expressionList
-    t, node = compile_expression_list(t, tokengen)
+    node = compile_expression_list(t, tokengen)
     root.append(node)
+    t = next(tokengen)
 
     # ')' symbol
     expect(t, ")")
@@ -299,8 +301,9 @@ def compile_let(t, tokengen):
         node.text = t[1]
         t = next(tokengen)
         # single expression
-        t, node = compile_expression(t, tokengen)
+        node = compile_expression(t, tokengen)
         root.append(node)
+        t = next(tokengen)
         # ']' symbol
         expect(t, "]")
         node = ET.SubElement(root, "symbol")
@@ -312,8 +315,9 @@ def compile_let(t, tokengen):
     node.text = t[1]
     t = next(tokengen)
     # single expression
-    t, node = compile_expression(t, tokengen)
+    node = compile_expression(t, tokengen)
     root.append(node)
+    t = next(tokengen)
     # ';'
     expect(t, ";")
     node = ET.SubElement(root, "symbol")
@@ -337,8 +341,9 @@ def compile_while(t, tokengen):
     node.text = t[1]
     t = next(tokengen)
     # single expression
-    t, node = compile_expression(t, tokengen)
+    node = compile_expression(t, tokengen)
     root.append(node)
+    t = next(tokengen)
     # ')' symbol
     node = ET.SubElement(root, "symbol")
     node.text = t[1]
@@ -349,8 +354,9 @@ def compile_while(t, tokengen):
     node.text = t[1]
     t = next(tokengen)
     # statements
-    t, node = compile_statements(t, tokengen)
+    node = compile_statements(t, tokengen)
     root.append(node)
+    t = next(tokengen)
     # '}' symbol
     expect(t, "}")
     node = ET.SubElement(root, "symbol")
@@ -370,8 +376,9 @@ def compile_return(t, tokengen):
     t = next(tokengen)
     # 1 or 0 expressions
     if t[1] != ";":
-        t, node = compile_expression(t, tokengen)
+        node = compile_expression(t, tokengen)
         root.append(node)
+        t = next(tokengen)
     # Semicolon
     node = ET.SubElement(root, "symbol")
     node.text = t[1]
@@ -396,8 +403,9 @@ def compile_if(t, tokengen):
     node.text = t[1]
     t = next(tokengen)
     # single expression
-    t, node = compile_expression(t, tokengen)
+    node = compile_expression(t, tokengen)
     root.append(node)
+    t = next(tokengen)
     # ')' symbol
     expect(t, ")")
     node = ET.SubElement(root, "symbol")
@@ -409,8 +417,9 @@ def compile_if(t, tokengen):
     node.text = t[1]
     t = next(tokengen)
     # statements
-    t, node = compile_statements(t, tokengen)
+    node = compile_statements(t, tokengen)
     root.append(node)
+    t = next(tokengen)
     # '}' symbol
     expect(t, "}")
     node = ET.SubElement(root, "symbol")
@@ -432,8 +441,9 @@ def compile_if(t, tokengen):
     node.text = t[1]
     t = next(tokengen)
     # statements
-    t, node = compile_statements(t, tokengen)
+    node = compile_statements(t, tokengen)
     root.append(node)
+    t = next(tokengen)
     # '}' symbol
     expect(t, "}")
     node = ET.SubElement(root, "symbol")
@@ -458,7 +468,8 @@ def compile_statements(t, tokengen):
         root.append(node)
         t = next(tokengen)
 
-    return t, root
+    tokengen.pushback(t)
+    return root
 
 
 def compile_statement(t, tokengen):
@@ -498,8 +509,9 @@ def compile_term(t, tokengen):
         t = next(tokengen)
 
         # expression
-        t, node = compile_expression(t, tokengen)
+        node = compile_expression(t, tokengen)
         root.append(node)
+        t = next(tokengen)
 
         # ')' symbol
         expect(t, ")")
@@ -529,8 +541,9 @@ def compile_term(t, tokengen):
             t = next(tokengen)
 
             # expressionList
-            t, node = compile_expression_list(t, tokengen)
+            node = compile_expression_list(t, tokengen)
             root.append(node)
+            t = next(tokengen)
 
             # ')' symbol
             expect(t, ")")
@@ -545,8 +558,9 @@ def compile_term(t, tokengen):
             t = next(tokengen)
 
             # expression
-            t, node = compile_expression(t, tokengen)
+            node = compile_expression(t, tokengen)
             root.append(node)
+            t = next(tokengen)
 
             # ']' symbol
             expect(t, "]")
@@ -561,8 +575,9 @@ def compile_term(t, tokengen):
             t = next(tokengen)
 
             # expressionList
-            t, node = compile_expression_list(t, tokengen)
+            node = compile_expression_list(t, tokengen)
             root.append(node)
+            t = next(tokengen)
 
             # ')' symbol
             expect(t, ")")
@@ -583,17 +598,21 @@ def compile_expression_list(t, tokengen):
     root = ET.Element("expressionList")
     root.text = "\n"
     while t[1] != ")":
-        t, node = compile_expression(t, tokengen)
+        node = compile_expression(t, tokengen)
         root.append(node)
+        t = next(tokengen)
         while t[1] == ",":
             # comma symbol
             node = ET.SubElement(root, "symbol")
             node.text = t[1]
             t = next(tokengen)
-            t, node = compile_expression(t, tokengen)
-            root.append(node)
 
-    return t, root
+            node = compile_expression(t, tokengen)
+            root.append(node)
+            t = next(tokengen)
+
+    tokengen.pushback(t)
+    return root
 
 
 def compile_expression(t, tokengen):
@@ -604,8 +623,10 @@ def compile_expression(t, tokengen):
     # term
     node = compile_term(t, tokengen)
     root.append(node)
-    t = next(tokengen)
+    t = tokengen.peek()
     while t[1] in INFIX_OPS:
+        # remove peeked value
+        next(tokengen)
         # op
         node = ET.SubElement(root, "symbol")
         node.text = t[1]
@@ -613,6 +634,6 @@ def compile_expression(t, tokengen):
         # term
         node = compile_term(t, tokengen)
         root.append(node)
-        t = next(tokengen)
+        t = tokengen.peek()
 
-    return t, root
+    return root
