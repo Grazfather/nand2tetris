@@ -4,8 +4,16 @@ import xml.etree.ElementTree as ET
 TYPES = {"int", "char", "boolean", "void"}
 IDENTIFIER_KEYWORDS = {"this"}
 INFIX_OPS = {"+", "-", "*", "/", "&", "|", "<", ">", "="}
-UNARY_OPS = {"-", "~"}
-KEYWORD_CONSTANTS = {"true", "false", "null", "this"}
+UNARY_OPS = {
+    "-": "neg",
+    "~": "not"
+}
+KEYWORD_CONSTANTS = {
+    "true": 1,
+    "false": 0,
+    "null": 0,
+    "this": 0
+}
 
 
 class JackSyntaxError(Exception):
@@ -83,17 +91,16 @@ def dispatch_compile(_classname, tokengen, writer):
     token = next(tokengen)
     typ, value = token
     if typ == "keyword" and value == "class":
-        root = compile_class(token, tokengen)
+        s = compile_class(token, tokengen)
     else:
         raise JackSyntaxError("Class file must begin with class declaration")
-
-    # writer.write(ET.tostring(root))
 
 
 def compile_class(t, tokengen):
     """
     'class' className '{' classVarDec* subroutineDec* '}'
     """
+    s = []
     # class keyword
     t = next(tokengen)
     # className
@@ -104,18 +111,18 @@ def compile_class(t, tokengen):
 
     # classvars
     while t.type == "keyword" and (t.value == "static" or t.value == "field"):
-        compile_classvardec(t, tokengen)
+        build_classvars(t, tokengen)
         t = next(tokengen)
 
     # subroutines
     while t.type == "keyword" and (t.value == "constructor" or t.value == "function" or t.value == "method"):
-        compile_subroutine(t, tokengen)
+        s += compile_subroutine(t, tokengen)
         t = next(tokengen)
 
     # '}' symbol
     expect(t, "}")
-    # Does it need to return anything?
-    # return root
+
+    return s
 
 
 def compile_subroutine(t, tokengen):
@@ -123,67 +130,63 @@ def compile_subroutine(t, tokengen):
     ('constructor' | 'function' | 'method') ('void' | type) subroutineName '(' parameterList ')'
     subroutineBody
     """
-    root = ET.Element("subroutineDec")
+    s = []
     # constructor, function, or method
-    node = ET.SubElement(root, "keyword")
-    node.text = t.value
-    if node.text == "constructor" or node.text == "method":
+    if t.value == "constructor" or t.value == "method":
         is_method = True
     else:
         is_method = False
     t = next(tokengen)
     # type
-    if t.type == "identifier":
-        node = ET.SubElement(root, "identifier-CLASS")
-    else:
-        node = ET.SubElement(root, "keyword")
-    node.text = t.value
     t = next(tokengen)
     # subroutineName
-    node = ET.SubElement(root, "identifier-SUBROUTINE")
-    node.text = t.value
+    # TODO: Figure out the right name, if method, num locals, etc
+    s.append("function {} x".format(t.value))
     t = next(tokengen)
     # '(' parameterList ')'
     st.start_subroutine(method=is_method)
     # TODO: Will it need to return anything?
-    compile_parameter_list(t, tokengen)
-    root.extend(node)
+    build_parameter_list(t, tokengen)
     t = next(tokengen)
     # subroutineBody
     # TODO: Does it need to know whether the subroutine is a method?
-    compile_subroutine_body(t, tokengen)
-    # node = compile_subroutine_body(t, tokengen, is_method)
-    return root
+    s += compile_subroutine_body(t, tokengen)
+
+    return s
 
 
 def compile_subroutine_body(t, tokengen):
     """
     '{' varDec* statements '}'
     """
+    s = []
     # '{'
     expect(t, "{")
 
     # Add all declarations to the symbol table
     t = next(tokengen)
     while t.value == "var":
-        compile_vardec(t, tokengen)
+        build_vars(t, tokengen)
         t = next(tokengen)
 
-    t = compile_statements(t, tokengen)
+    s += compile_statements(t, tokengen)
+    t = next(tokengen)
     expect(t, "}")
     # TODO: Clear out local symbols?
+    return s
 
 
-def compile_classvardec(t, tokengen):
-    return compile_vardec(t, tokengen)
+def build_classvars(t, tokengen):
+    return build_vars(t, tokengen)
 
 
-def compile_vardec(t, tokengen):
+def build_vars(t, tokengen):
     """
     Normal:
     'var' type varName (',', varName)* ';'
     Class:
     ('static' | 'field') type varName (',' varName)* ';'
+    This function only modifies the symbol table, it does not generate code.
     """
     # var, static, or field
     kind = t.value
@@ -202,9 +205,10 @@ def compile_vardec(t, tokengen):
         t = next(tokengen)
 
 
-def compile_parameter_list(t, tokengen):
+def build_parameter_list(t, tokengen):
     """
     ((type varName)(',' type varName)*)?
+    This function only modifies the symbol table, it does not generate code.
     """
     # We include the surrounding parens
     # '('
@@ -230,68 +234,55 @@ def compile_parameter_list(t, tokengen):
     # ')'
     expect(t, ")")
 
-    # TODO: Will it need to return anything?
-    # return nodes
-
 
 def compile_do(t, tokengen):
     """
     'do' subroutineCall ';'
          subroutineName '(' expressionList ')' | (className | varName) '.' subroutineName '(' expressionList ')'
     """
-    root = ET.Element("doStatement")
+    s = []
     # let keyword
     expect(t, "do")
-    node = ET.SubElement(root, "keyword")
-    node.text = t.value
     t = next(tokengen)
+    name = t.value
     # Either a subroutineName directly or an object or varName followed by a dot and a subroutine name
     # Either way, it's first an identifier
     # -- subroutineName OR className | varName
-    first_ident = node = ET.SubElement(root, "identifier-SUBROUTINE")
-    node.text = t.value
     t = next(tokengen)
     if t.value == ".":  # Method call
         # -- '.' symbol
         expect(t, ".")
-        node = ET.SubElement(root, "symbol")
-        node.text = t.value
         t = next(tokengen)
         # subroutineName
-        node = ET.SubElement(root, "identifier-SUBROUTINE")
-        first_ident.tag = "identifier-BLA"
+        name = name + "." + t.value
         # TODO: Check symbol table to determine if the first identifier is a symbol or a class
-        node.text = t.value
         t = next(tokengen)
 
     # '(' symbol
     expect(t, "(")
-    node = ET.SubElement(root, "symbol")
-    node.text = t.value
     t = next(tokengen)
 
     # expressionList
-    t, node = compile_expression_list(t, tokengen)
-    root.append(node)
+    s += compile_expression_list(t, tokengen)
+    t = next(tokengen)
 
     # ')' symbol
     expect(t, ")")
-    node = ET.SubElement(root, "symbol")
-    node.text = t.value
     t = next(tokengen)
 
     # ';' symbol
     expect(t, ";")
-    node = ET.SubElement(root, "symbol")
-    node.text = t.value
 
-    return root
+    s.append("call {}".format(name))
+
+    return s
 
 
 def compile_let(t, tokengen):
     """
     'let' varName( '[' expression ']' )? '=' expression ';'
     """
+    s = []
     # let keyword
     expect(t, "let")
     # varName
@@ -306,7 +297,8 @@ def compile_let(t, tokengen):
         # '[' symbol
         t = next(tokengen)
         # single expression
-        t = compile_expression(t, tokengen)
+        s += compile_expression(t, tokengen)
+        t = next(tokengen)
         # ']' symbol
         expect(t, "]")
         t = next(tokengen)
@@ -314,62 +306,61 @@ def compile_let(t, tokengen):
     expect(t, "=")
     t = next(tokengen)
     # single expression
-    t = compile_expression(t, tokengen)
+    s += compile_expression(t, tokengen)
+    t = next(tokengen)
     # ';'
     expect(t, ";")
 
-    return
+    # TODO: pop it into the target variable
+    s.append("pop {}".format(name))
+
+    return s
 
 
 def compile_while(t, tokengen):
     """
     'while' '(' expression ')' '{' statements '}'
     """
-    root = ET.Element("whileStatement")
+    s = []
     # while keyword
     expect(t, "while")
-    node = ET.SubElement(root, "keyword")
-    node.text = t.value
     t = next(tokengen)
     # '(' symbol
-    node = ET.SubElement(root, "symbol")
-    node.text = t.value
     t = next(tokengen)
     # single expression
-    t = compile_expression(t, tokengen)
-    root.append(node)
+    s += compile_expression(t, tokengen)
+    t = next(tokengen)
     # ')' symbol
-    node = ET.SubElement(root, "symbol")
-    node.text = t.value
     t = next(tokengen)
     # '{' symbol
     expect(t, "{")
-    node = ET.SubElement(root, "symbol")
-    node.text = t.value
     t = next(tokengen)
     # statements
-    t = compile_statements(t, tokengen)
+    s += compile_statements(t, tokengen)
+    t = next(tokengen)
     # '}' symbol
     expect(t, "}")
-    node = ET.SubElement(root, "symbol")
-    node.text = t.value
 
-    return root
+    return s
 
 
 def compile_return(t, tokengen):
     """
     'return' expression? ';'
     """
-    root = ET.Element("returnStatement")
+    s = []
     # return keyword
     t = next(tokengen)
+
     # 1 or 0 expressions
     if t.value != ";":
-        t = compile_expression(t, tokengen)
-    # Semicolon
+        s += compile_expression(t, tokengen)
+        t = next(tokengen)
+    # Semicolon already removed
 
-    return root
+    s.append("return")
+
+    return s
 
 
 def compile_if(t, tokengen):
@@ -377,6 +368,7 @@ def compile_if(t, tokengen):
     'if' '(' expression ')' '{' statements '}'
     ('else' '{' statements '}')?
     """
+    s = []
     # if keyword
     expect(t, "if")
     t = next(tokengen)
@@ -384,8 +376,8 @@ def compile_if(t, tokengen):
     expect(t, "(")
     t = next(tokengen)
     # single expression
-    t = compile_expression(t, tokengen)
-    root.append(node)
+    compile_expression(t, tokengen)
+    t = next(tokengen)
     # ')' symbol
     expect(t, ")")
     t = next(tokengen)
@@ -393,33 +385,29 @@ def compile_if(t, tokengen):
     expect(t, "{")
     t = next(tokengen)
     # statements
-    t = compile_statements(t, tokengen)
+    compile_statements(t, tokengen)
+    t = next(tokengen)
     # '}' symbol
     expect(t, "}")
 
     tp = tokengen.peek()
     if tp.value != "else":
-        return root
+        return s
 
     t = next(tokengen)
     # else keyword
     expect(t, "else")
-    node = ET.SubElement(root, "keyword")
-    node.text = t.value
     t = next(tokengen)
     # '{' symbol
     expect(t, "{")
-    node = ET.SubElement(root, "symbol")
-    node.text = t.value
     t = next(tokengen)
     # statements
-    t = compile_statements(t, tokengen)
+    compile_statements(t, tokengen)
+    t = next(tokengen)
     # '}' symbol
     expect(t, "}")
-    node = ET.SubElement(root, "symbol")
-    node.text = t.value
 
-    return root
+    return s
 
 
 STATEMENT_TYPES = {
@@ -432,13 +420,13 @@ STATEMENT_TYPES = {
 
 
 def compile_statements(t, tokengen):
+    s = []
     while t.value != '}': # TODO: Better test?
-        compile_statement(t, tokengen)
+        s += compile_statement(t, tokengen)
         t = next(tokengen)
 
-    # TODO: Push back t so it doesn't have to be returned?
-    return t
-
+    tokengen.pushback(t)
+    return s
 
 def compile_statement(t, tokengen):
     return STATEMENT_TYPES[t.value](t, tokengen)
@@ -456,134 +444,167 @@ def compile_term(t, tokengen):
       subroutineName '(' expressionList ')' |
       (className | varName) '.' subroutineName '(' expressionList ')'
     """
-    root = ET.Element("term")
+    s = []
+
     if t.type in {"integerConstant", "stringConstant"}:
-        node = ET.SubElement(root, t.type)
-        node.text = t.value
+        # type = number
+        # TODO: How to do get string address?
+        s.append("push {}".format(t.value))
     elif t.value in KEYWORD_CONSTANTS:
-        node = ET.SubElement(root, "keyword")
-        node.text = t.value
+        # type = number
+        # TODO: How do we handle `this`?
+        s.append("push constant {}".format(t.value))
     elif t.value in UNARY_OPS:
-        node = ET.SubElement(root, "symbol")
-        node.text = t.value
+        # type = unary
+        op = t.value
         t = next(tokengen)
-        node = compile_term(t, tokengen)
-        root.append(node)
+        s += compile_term(t, tokengen)
+        s.append(UNARY_OPS[op])
     elif t.value == "(":
         # '(' symbol
-        node = ET.SubElement(root, "symbol")
-        node.text = t.value
         t = next(tokengen)
 
         # expression
-        t = compile_expression(t, tokengen)
+        s += compile_expression(t, tokengen)
+        t = next(tokengen)
 
         # ')' symbol
         expect(t, ")")
-        node = ET.SubElement(root, "symbol")
-        node.text = t.value
     else:  # an identifier, with either possibly a call or indexing
         # TODO: Pull these from the symbol table that was built in the class and method declaration
         expect_type(t, "identifier")
-        node = ET.SubElement(root, "identifier")
-        node.text = t.value
+        name = t.value
         tp = tokengen.peek()
         if tp.value == ".":  # Method call
             t = next(tokengen)
             # -- '.' symbol
             expect(t, ".")
-            node = ET.SubElement(root, "symbol")
-            node.text = t.value
             t = next(tokengen)
             # subroutineName
-            node = ET.SubElement(root, "identifier")
-            node.text = t.value
+            name = name + "." + t.value
             t = next(tokengen)
 
             # '(' symbol
             expect(t, "(")
-            node = ET.SubElement(root, "symbol")
-            node.text = t.value
             t = next(tokengen)
 
             # expressionList
-            t, node = compile_expression_list(t, tokengen)
-            root.append(node)
+            s += compile_expression_list(t, tokengen)
+            t = next(tokengen)
 
             # ')' symbol
             expect(t, ")")
-            node = ET.SubElement(root, "symbol")
-            node.text = t.value
+
+            # Now with the args set up call the method
+            s.append("call {}".format(name))
         elif tp.value == "[":  # Array access
             t = next(tokengen)
             # '[' symbol
             expect(t, "[")
-            node = ET.SubElement(root, "symbol")
-            node.text = t.value
             t = next(tokengen)
 
             # expression
-            t = compile_expression(t, tokengen)
+            s += compile_expression(t, tokengen)
+            t = next(tokengen)
 
             # ']' symbol
             expect(t, "]")
-            node = ET.SubElement(root, "symbol")
-            node.text = t.value
         elif tp.value == "(":  # Function call
             t = next(tokengen)
             # '(' symbol
             expect(t, "(")
-            node = ET.SubElement(root, "symbol")
-            node.text = t.value
             t = next(tokengen)
 
             # expressionList
-            t, node = compile_expression_list(t, tokengen)
-            root.append(node)
+            s += compile_expression_list(t, tokengen)
+            t = next(tokengen)
 
             # ')' symbol
             expect(t, ")")
-            node = ET.SubElement(root, "symbol")
-            node.text = t.value
-            # t = next(tokengen)
+
+            # Now with args set up call the function
+            s.append("call {}".format(name))
         else:  # Just a reference
             # In this case we DON'T pop the peeked token
+            # TODO: Find section and index
+            s.append("push {}".format(name))
             pass
 
-    return root
+    return s
 
 
 def compile_expression_list(t, tokengen):
     """
     (expression (',' expression)*)?
     """
-    root = ET.Element("expressionList")
-    root.text = "\n"
+    s = []
     while t.value != ")":
-        t = compile_expression(t, tokengen)
+        s += compile_expression(t, tokengen)
+        t = next(tokengen)
         while t.value == ",":
-            # comma symbol
-            node = ET.SubElement(root, "symbol")
-            node.text = t.value
             t = next(tokengen)
-            t = compile_expression(t, tokengen)
-            root.append(node)
+            s += compile_expression(t, tokengen)
+            t = next(tokengen)
 
-    return t, root
-
+    tokengen.pushback(t)
+    return s
 
 def compile_expression(t, tokengen):
     """
     term (op term)*
     """
+    # TODO: Build tree
+    # left = first term
+    # parent = op
+    # right = second term (recurse here)
+    # Better algo: 'codewrite'
+    """
+    class Expression:
+        def __init__(self):
+            self.type = {"number", "var", "binary", "unary", "call"}
+            self.op = None
+            self.exprs = []
+
+        def write(self):
+            s = []
+            if self.type == "number":
+                s += "push <number>"
+            elif self.type == "var":
+                s += "push <var>"
+            elif self.type == "binary":
+                s += self.exp[0].write()
+                s += self.exp[1].write()
+                s += "<op>"
+            elif self.type == "unary":
+                s += self.exp[0].write()
+                s += "<op>"
+            elif self.type == "call":
+                for exp in self.exprs:
+                    s += exp.write()
+                s += "call <func>"
+            else:
+                raise Exception("wtf is going on?")
+
+            return s
+    """
+
+    s = []
     # term
-    node = compile_term(t, tokengen)
-    t = next(tokengen)
-    while t.value in INFIX_OPS:
-        # op
+    s += compile_term(t, tokengen)
+    t = tokengen.peek()
+    if t.value in INFIX_OPS:
+    # while t.value in INFIX_OPS:
+        # Remove peeked value
+        next(tokengen)
+        op = t.value
         t = next(tokengen)
         # term
-        compile_term(t, tokengen)
-        t = next(tokengen)
+        # TODO: Should we consider this next term a new expression (and not need the loop?)
+        s += compile_expression(t, tokengen)
+        # s += compile_term(t, tokengen)
+        t = tokengen.peek()
+        # Emit op last
+        s.append(op) # TODO: Is this a call?
 
-    return t
+    return s
+    # TODO: Post-order walk the tree, pushing terms, calling ops
