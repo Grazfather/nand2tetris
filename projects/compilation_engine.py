@@ -3,7 +3,17 @@ import xml.etree.ElementTree as ET
 
 TYPES = {"int", "char", "boolean", "void"}
 IDENTIFIER_KEYWORDS = {"this"}
-INFIX_OPS = {"+", "-", "*", "/", "&", "|", "<", ">", "="}
+INFIX_OPS = {
+    "+": "add",
+    "-": "sub",
+    "*": "mult",
+    "/": "div",
+    "&": "and",
+    "|": "or",
+    "<": "lt",
+    ">": "gt",
+    "=": "eq"
+}
 UNARY_OPS = {
     "-": "neg",
     "~": "not"
@@ -22,8 +32,8 @@ class JackSyntaxError(Exception):
 Symbol = collections.namedtuple("Symbol", "name, type, kind, index")
 
 class SymbolTable():
-    class_kinds = {"static", "field"}
-    sub_kinds = {"argument", "var"}
+    CLASS_KINDS = {"static", "field"}
+    SUB_KINDS = {"argument", "var"}
 
     def __init__(self):
         self.class_table = {}
@@ -36,7 +46,7 @@ class SymbolTable():
         for sym_name in self.sub_table:
             del self.syms[sym_name]
         # Reset counts for subroutine kinds
-        for kind in self.sub_kinds:
+        for kind in self.SUB_KINDS:
             self.counts[kind] = 0
         # Start new sub table
         self.sub_table = {}
@@ -47,7 +57,7 @@ class SymbolTable():
     def add_symbol(self, name, typ, kind):
         s = Symbol(name, typ, kind, self.counts[kind])
         self.counts[kind] += 1
-        if kind in self.class_kinds:
+        if kind in self.CLASS_KINDS:
             self.class_table[name] = s
         else:
             self.sub_table[name] = s
@@ -57,7 +67,7 @@ class SymbolTable():
         try:
             return self.syms[name]
         except KeyError:
-            raise Exception("Symbol {} not defined!".format(name))
+            raise Exception("Symbol {} not defined!".format(name)) from None
 
     def varcount(self, kind):
         return self.counts[kind]
@@ -141,7 +151,7 @@ def compile_subroutine(t, tokengen):
     t = next(tokengen)
     # subroutineName
     # TODO: Figure out the right name, if method, num locals, etc
-    s.append("function {} x".format(t.value))
+    s.append("function {} <>".format(t.value))
     t = next(tokengen)
     # '(' parameterList ')'
     st.start_subroutine(method=is_method)
@@ -151,6 +161,7 @@ def compile_subroutine(t, tokengen):
     # subroutineBody
     # TODO: Does it need to know whether the subroutine is a method?
     s += compile_subroutine_body(t, tokengen)
+    # TODO: Clear stack frame and return
 
     return s
 
@@ -312,7 +323,8 @@ def compile_let(t, tokengen):
     expect(t, ";")
 
     # TODO: pop it into the target variable
-    s.append("pop {}".format(name))
+    symbol = st.get(name)
+    s.append("pop {0.kind} {0.index} # {0.name}".format(symbol))
 
     return s
 
@@ -321,16 +333,22 @@ def compile_while(t, tokengen):
     """
     'while' '(' expression ')' '{' statements '}'
     """
+    top_label = "WHILE_TOP_{}".format(tokengen.count)
+    end_label = "WHILE_END_{}".format(tokengen.count)
     s = []
     # while keyword
     expect(t, "while")
     t = next(tokengen)
     # '(' symbol
     t = next(tokengen)
+    s.append("label {}".format(top_label))
     # single expression
     s += compile_expression(t, tokengen)
     t = next(tokengen)
     # ')' symbol
+    # Negate the expression since we jump if it ISN'T true
+    s.append("not")
+    s.append("if-goto {}".format(end_label))
     t = next(tokengen)
     # '{' symbol
     expect(t, "{")
@@ -340,6 +358,8 @@ def compile_while(t, tokengen):
     t = next(tokengen)
     # '}' symbol
     expect(t, "}")
+    s.append("goto {}".format(top_label))
+    s.append("label {}".format(end_label))
 
     return s
 
@@ -368,6 +388,8 @@ def compile_if(t, tokengen):
     'if' '(' expression ')' '{' statements '}'
     ('else' '{' statements '}')?
     """
+    else_label = "IF_ELSE_{}".format(tokengen.count)
+    end_label = "IF_END_{}".format(tokengen.count)
     s = []
     # if keyword
     expect(t, "if")
@@ -376,23 +398,34 @@ def compile_if(t, tokengen):
     expect(t, "(")
     t = next(tokengen)
     # single expression
-    compile_expression(t, tokengen)
+    s += compile_expression(t, tokengen)
     t = next(tokengen)
     # ')' symbol
     expect(t, ")")
+    # Negate the expression since we jump if it ISN'T true
+    s.append("not")
+    s.append("if-goto {}".format(else_label))
     t = next(tokengen)
     # '{' symbol
     expect(t, "{")
+    # TODO: Jump past if to end or to else (need name by now)
+    # TODO: No label needed, just fall through
     t = next(tokengen)
     # statements
-    compile_statements(t, tokengen)
+    s += compile_statements(t, tokengen)
     t = next(tokengen)
     # '}' symbol
     expect(t, "}")
 
+    # If there's no else, then we're done
     tp = tokengen.peek()
     if tp.value != "else":
+        s.append("label {}".format(else_label))
         return s
+
+    # Done the if block, jump over the else
+    s.append("goto {}".format(end_label))
+    s.append("label {}".format(else_label))
 
     t = next(tokengen)
     # else keyword
@@ -400,12 +433,14 @@ def compile_if(t, tokengen):
     t = next(tokengen)
     # '{' symbol
     expect(t, "{")
+    # TODO: Add jump label
     t = next(tokengen)
     # statements
-    compile_statements(t, tokengen)
+    s += compile_statements(t, tokengen)
     t = next(tokengen)
     # '}' symbol
     expect(t, "}")
+    s.append("label {}".format(end_label))
 
     return s
 
@@ -449,7 +484,7 @@ def compile_term(t, tokengen):
     if t.type in {"integerConstant", "stringConstant"}:
         # type = number
         # TODO: How to do get string address?
-        s.append("push {}".format(t.value))
+        s.append("push constant {}".format(t.value))
     elif t.value in KEYWORD_CONSTANTS:
         # type = number
         # TODO: How do we handle `this`?
@@ -527,7 +562,8 @@ def compile_term(t, tokengen):
         else:  # Just a reference
             # In this case we DON'T pop the peeked token
             # TODO: Find section and index
-            s.append("push {}".format(name))
+            symbol = st.get(name)
+            s.append("push {0.kind} {0.index} # {0.name}".format(symbol))
             pass
 
     return s
@@ -553,40 +589,6 @@ def compile_expression(t, tokengen):
     """
     term (op term)*
     """
-    # TODO: Build tree
-    # left = first term
-    # parent = op
-    # right = second term (recurse here)
-    # Better algo: 'codewrite'
-    """
-    class Expression:
-        def __init__(self):
-            self.type = {"number", "var", "binary", "unary", "call"}
-            self.op = None
-            self.exprs = []
-
-        def write(self):
-            s = []
-            if self.type == "number":
-                s += "push <number>"
-            elif self.type == "var":
-                s += "push <var>"
-            elif self.type == "binary":
-                s += self.exp[0].write()
-                s += self.exp[1].write()
-                s += "<op>"
-            elif self.type == "unary":
-                s += self.exp[0].write()
-                s += "<op>"
-            elif self.type == "call":
-                for exp in self.exprs:
-                    s += exp.write()
-                s += "call <func>"
-            else:
-                raise Exception("wtf is going on?")
-
-            return s
-    """
 
     s = []
     # term
@@ -596,7 +598,7 @@ def compile_expression(t, tokengen):
     # while t.value in INFIX_OPS:
         # Remove peeked value
         next(tokengen)
-        op = t.value
+        op = INFIX_OPS[t.value]
         t = next(tokengen)
         # term
         # TODO: Should we consider this next term a new expression (and not need the loop?)
@@ -607,4 +609,3 @@ def compile_expression(t, tokengen):
         s.append(op) # TODO: Is this a call?
 
     return s
-    # TODO: Post-order walk the tree, pushing terms, calling ops

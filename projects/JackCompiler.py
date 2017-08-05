@@ -48,6 +48,7 @@ Read next token, dispatch to correct compilexxx method, emit vm code
     """
 class PeekaheadIterator():
     def __init__(self, it):
+        self.count = 0
         self.it = it
         self.items = collections.deque()
 
@@ -55,6 +56,8 @@ class PeekaheadIterator():
         return self
 
     def __next__(self):
+        # Yuck. Needed to guarantee unique labels
+        self.count += 1
         if self.items:
             return self.items.popleft()
         return next(self.it)
