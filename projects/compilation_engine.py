@@ -156,18 +156,48 @@ def compile_subroutine(t, tokengen):
     t = next(tokengen)
     # subroutineName
     # TODO: Figure out the right name, if method, num locals, etc
-    s.append("function {} <>".format(t.value))
+    name = t.value
     t = next(tokengen)
     # '(' parameterList ')'
     st.start_subroutine(method=kind == "method")
-    # TODO: Will it need to return anything?
     build_parameter_list(t, tokengen)
+    s.append("function {}.{} {{}}".format(classname, name))
+    index = len(s) - 1
+
     t = next(tokengen)
     # subroutineBody
-    # TODO: Does it need to know whether the subroutine is a method?
-    s += compile_subroutine_body(t, tokengen)
-    # TODO: Clear stack frame and return
+    if kind == "method":
+        s += compile_method(t, tokengen)
+    elif kind == "constructor":
+        s += compile_constructor(t, tokengen)
+    else:
+        s += compile_subroutine_body(t, tokengen)
 
+    # Yuck: Since we don't know the number of locals until we compile the
+    # subroutine, we go back and adjust the function declaration
+    num = st.varcount("var")
+    s[index] = s[index].format(num)
+    return s
+
+
+def compile_method(t, tokengen):
+    s = []
+    # Methods have implied 'this' argument
+    s.append("push argument 0")
+    s.append("pop pointer 0")
+    # Constructors always end in "return this" so rv is handled
+    s += compile_subroutine_body(t, tokengen)
+    return s
+
+
+def compile_constructor(t, tokengen):
+    s = []
+    # Constructors have implied call to Memory.alloc
+    size = st.varcount("field")
+    s.append("push constant {}".format(size))
+    s.append("call Memory.alloc 1")
+    s.append("pop pointer 0")
+    s += compile_subroutine_body(t, tokengen)
     return s
 
 
@@ -225,7 +255,9 @@ def build_parameter_list(t, tokengen):
     """
     ((type varName)(',' type varName)*)?
     This function only modifies the symbol table, it does not generate code.
+    Return the number of parameters.
     """
+    num = 0
     # We include the surrounding parens
     # '('
     t = next(tokengen)
@@ -236,6 +268,7 @@ def build_parameter_list(t, tokengen):
         t = next(tokengen)
         # varName
         st.add_symbol(t.value, typ, "argument")
+        num += 1
         t = next(tokengen)
 
         while t.value == ",":
@@ -246,9 +279,11 @@ def build_parameter_list(t, tokengen):
             t = next(tokengen)
             # varName
             st.add_symbol(t.value, typ, "argument")
+            num += 1
             t = next(tokengen)
     # ')'
     expect(t, ")")
+    return num
 
 
 def compile_do(t, tokengen):
