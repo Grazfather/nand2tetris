@@ -300,14 +300,25 @@ def compile_do(t, tokengen):
     # Either way, it's first an identifier
     # -- subroutineName OR className | varName
     t = next(tokengen)
-    if t.value == ".":  # Method call
+    if t.value == ".":  # Function or method call on object
         # -- '.' symbol
         expect(t, ".")
         t = next(tokengen)
         # subroutineName
-        name = name + "." + t.value
+        try:
+            # If the identifier is a symbol, get its type to namespace the
+            # call and its name to push as 'this'
+            symbol = st.get(name)
+            name = symbol.type + "." + t.value
+            s.append("push {0.section} {0.index} # {0.name}".format(symbol))
+        except:
+            # Otherwise, must be a class function call, no extra args
+            pass
         # TODO: Check symbol table to determine if the first identifier is a symbol or a class
         t = next(tokengen)
+    else:  # If the object or class isn't specified, it's a 'thismethod'
+        s.append("push pointer 0")
+        name = classname + "." + name
 
     # '(' symbol
     expect(t, "(")
@@ -324,7 +335,11 @@ def compile_do(t, tokengen):
     # ';' symbol
     expect(t, ";")
 
-    s.append("call {}".format(name))
+    # TODO: get the number of args
+    numargs = 1000
+    s.append("call {} {}".format(name, numargs))
+    # Throw away the return value
+    s.append("pop temp 0")
 
     return s
 
@@ -556,12 +571,12 @@ def compile_term(t, tokengen):
         if tp.value == ".":  # Method/class function call
             try:
                 # If the identifier is a symbol, get its type to namespace the
-                # call and its name to push this
+                # call and its name to push 'this'
                 symbol = st.get(name)
                 name = symbol.type
                 s.append("push {0.section} {0.index} # {0.name}".format(symbol))
             except:
-                # Must be a function or constructor call
+                # Otherwise, must be a function or constructor call
                 pass
             t = next(tokengen)
             # -- '.' symbol
@@ -596,7 +611,9 @@ def compile_term(t, tokengen):
 
             # ']' symbol
             expect(t, "]")
-        elif tp.value == "(":  # Function call
+        elif tp.value == "(":  # This method call
+            # Push 'this'
+            s.append("push pointer 0")
             t = next(tokengen)
             # '(' symbol
             expect(t, "(")
