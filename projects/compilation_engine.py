@@ -29,11 +29,17 @@ KEYWORD_CONSTANTS = {
 class JackSyntaxError(Exception):
     """An exception raised when the compiler hits an unexpected case."""
 
-Symbol = collections.namedtuple("Symbol", "name, type, kind, index")
+Symbol = collections.namedtuple("Symbol", "name, type, kind, section, index")
 
 class SymbolTable():
     CLASS_KINDS = {"static", "field"}
     SUB_KINDS = {"argument", "var"}
+    KIND_SECTION = {
+        "static": "static",
+        "field": "this",
+        "argument": "argument",
+        "var": "local",
+    }
 
     def __init__(self):
         self.class_table = {}
@@ -55,7 +61,8 @@ class SymbolTable():
             self.add_symbol("this", "object", "argument")
 
     def add_symbol(self, name, typ, kind):
-        s = Symbol(name, typ, kind, self.counts[kind])
+        section = self.KIND_SECTION[kind]
+        s = Symbol(name, typ, kind, section, self.counts[kind])
         self.counts[kind] += 1
         if kind in self.CLASS_KINDS:
             self.class_table[name] = s
@@ -324,7 +331,7 @@ def compile_let(t, tokengen):
 
     # TODO: pop it into the target variable
     symbol = st.get(name)
-    s.append("pop {0.kind} {0.index} # {0.name}".format(symbol))
+    s.append("pop {0.section} {0.index} # {0.name}".format(symbol))
 
     return s
 
@@ -510,7 +517,13 @@ def compile_term(t, tokengen):
         expect_type(t, "identifier")
         name = t.value
         tp = tokengen.peek()
-        if tp.value == ".":  # Method call
+        if tp.value == ".":  # Method/class function call
+            try:
+                symbol = st.get(name)
+                s.append("push {0.section} {0.index} # {0.name}".format(symbol))
+            except:
+                # Must be a function or constructor call
+                pass
             t = next(tokengen)
             # -- '.' symbol
             expect(t, ".")
@@ -563,7 +576,7 @@ def compile_term(t, tokengen):
             # In this case we DON'T pop the peeked token
             # TODO: Find section and index
             symbol = st.get(name)
-            s.append("push {0.kind} {0.index} # {0.name}".format(symbol))
+            s.append("push {0.section} {0.index} # {0.name}".format(symbol))
             pass
 
     return s
