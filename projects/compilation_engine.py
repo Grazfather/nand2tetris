@@ -6,8 +6,8 @@ IDENTIFIER_KEYWORDS = {"this"}
 INFIX_OPS = {
     "+": "add",
     "-": "sub",
-    "*": "mult",
-    "/": "div",
+    "*": "call Math.multiply 2",
+    "/": "call Math.divide 2",
     "&": "and",
     "|": "or",
     "<": "lt",
@@ -19,10 +19,10 @@ UNARY_OPS = {
     "~": "not"
 }
 KEYWORD_CONSTANTS = {
-    "true": 1,
-    "false": 0,
-    "null": 0,
-    "this": 0
+    "true": "constant 1",
+    "false": "constant 0",
+    "null": "constant 0",
+    "this": "pointer 0"
 }
 
 
@@ -56,7 +56,7 @@ class SymbolTable():
             self.counts[kind] = 0
         # Start new sub table
         self.sub_table = {}
-        # If the new subroutine is a method, add 'this'
+        # If the new subroutine is a method, add implicit 'this'
         if method:
             self.add_symbol("this", "object", "argument")
 
@@ -127,12 +127,13 @@ def compile_class(t, tokengen):
     t = next(tokengen)
 
     # classvars
-    while t.type == "keyword" and (t.value == "static" or t.value == "field"):
+    while t.type == "keyword" and t.value in ("static", "field"):
         build_classvars(t, tokengen)
         t = next(tokengen)
 
     # subroutines
-    while t.type == "keyword" and (t.value == "constructor" or t.value == "function" or t.value == "method"):
+    while t.type == "keyword" and t.value in ("constructor", "function", "method"):
+        # TODO: Constructors have to alloc memory and return pointer 0 (this)
         s += compile_subroutine(t, tokengen)
         t = next(tokengen)
 
@@ -149,10 +150,7 @@ def compile_subroutine(t, tokengen):
     """
     s = []
     # constructor, function, or method
-    if t.value == "constructor" or t.value == "method":
-        is_method = True
-    else:
-        is_method = False
+    kind = t.value
     t = next(tokengen)
     # type
     t = next(tokengen)
@@ -161,7 +159,7 @@ def compile_subroutine(t, tokengen):
     s.append("function {} <>".format(t.value))
     t = next(tokengen)
     # '(' parameterList ')'
-    st.start_subroutine(method=is_method)
+    st.start_subroutine(method=kind == "method")
     # TODO: Will it need to return anything?
     build_parameter_list(t, tokengen)
     t = next(tokengen)
@@ -259,7 +257,7 @@ def compile_do(t, tokengen):
          subroutineName '(' expressionList ')' | (className | varName) '.' subroutineName '(' expressionList ')'
     """
     s = []
-    # let keyword
+    # do keyword
     expect(t, "do")
     t = next(tokengen)
     name = t.value
@@ -379,11 +377,14 @@ def compile_return(t, tokengen):
     # return keyword
     t = next(tokengen)
 
-    # 1 or 0 expressions
+    # optional expression
     if t.value != ";":
         s += compile_expression(t, tokengen)
         t = next(tokengen)
+    else:
+        s.append("push constant 0")
     # Semicolon already removed
+    expect(t, ";")
 
     s.append("return")
 
@@ -494,8 +495,8 @@ def compile_term(t, tokengen):
         s.append("push constant {}".format(t.value))
     elif t.value in KEYWORD_CONSTANTS:
         # type = number
-        # TODO: How do we handle `this`?
-        s.append("push constant {}".format(t.value))
+        # TODO: How do we handle 'this'?
+        s.append("push {}".format(KEYWORD_CONSTANTS[t.value]))
     elif t.value in UNARY_OPS:
         # type = unary
         op = t.value
