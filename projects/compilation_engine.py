@@ -555,7 +555,10 @@ def compile_term(t, tokengen):
         tp = tokengen.peek()
         if tp.value == ".":  # Method/class function call
             try:
+                # If the identifier is a symbol, get its type to namespace the
+                # call and its name to push this
                 symbol = st.get(name)
+                name = symbol.type
                 s.append("push {0.section} {0.index} # {0.name}".format(symbol))
             except:
                 # Must be a function or constructor call
