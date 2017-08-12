@@ -549,10 +549,17 @@ def compile_term(t, tokengen):
     """
     s = []
 
-    if t.type in {"integerConstant", "stringConstant"}:
+    if t.type == "integerConstant":
         # type = number
         # TODO: How to do get string address?
         s.append("push constant {}".format(t.value))
+    elif t.type == "stringConstant":
+        l = len(t.value)
+        s.append("push constant {}\t# Creating string \"{}\"".format(l, t.value))
+        s.append("call String.new 1")
+        for c in t.value:
+            s.append("push constant {}".format(ord(c)))
+            s.append("call String.appendChar 2")
     elif t.value in KEYWORD_CONSTANTS:
         # type = number
         # TODO: How do we handle 'this'?
