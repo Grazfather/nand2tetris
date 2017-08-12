@@ -44,13 +44,9 @@ class SymbolTable():
     def __init__(self):
         self.class_table = {}
         self.sub_table = {}
-        self.syms = {}
         self.counts = collections.defaultdict(lambda: 0)
 
     def start_subroutine(self, method=False):
-        # Remove subroutine symbols from shared table
-        for sym_name in self.sub_table:
-            del self.syms[sym_name]
         # Reset counts for subroutine kinds
         for kind in self.SUB_KINDS:
             self.counts[kind] = 0
@@ -68,13 +64,15 @@ class SymbolTable():
             self.class_table[name] = s
         else:
             self.sub_table[name] = s
-        self.syms[name] = s
 
     def get(self, name):
         try:
-            return self.syms[name]
+            return self.sub_table[name]
         except KeyError:
-            raise Exception("Symbol {} not defined!".format(name)) from None
+            try:
+                return self.class_table[name]
+            except KeyError:
+                raise Exception("Symbol {} not defined!".format(name)) from None
 
     def varcount(self, kind):
         return self.counts[kind]
