@@ -86,7 +86,7 @@ def main(filepath):
         # Read in lines
         tokenizer = Tokenizer(fn)
 
-        with open(op.join(path, "{}.vm".format(classname)), "wb") as f:
+        with open(op.join(path, "{}.vm".format(classname)), "w") as f:
             compilation_engine.dispatch_compile(classname, PeekaheadIterator(tokenizer.lex()), f)
 
 

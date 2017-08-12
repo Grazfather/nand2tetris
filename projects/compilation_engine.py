@@ -19,7 +19,7 @@ UNARY_OPS = {
     "~": "not"
 }
 KEYWORD_CONSTANTS = {
-    "true": "constant 1",
+    "true": "constant 0\nnot", # barf
     "false": "constant 0",
     "null": "constant 0",
     "this": "pointer 0"
@@ -79,14 +79,17 @@ class SymbolTable():
     def varcount(self, kind):
         return self.counts[kind]
 
-    def kindof(self, name):
-        return self.syms[name].kind
 
-    def typeof(self, name):
-        return self.syms[name].type
+def push_symbol(symbol):
+    return "push {0.section} {0.index}\t# {0.name}".format(symbol)
 
-    def indexof(self, name):
-        return self.syms[name].index
+
+def pop_symbol(symbol):
+    return "pop {0.section} {0.index}\t# {0.name}".format(symbol)
+
+
+def write_label(label):
+    return "label {}".format(label)
 
 
 def expect(token, value):
@@ -111,6 +114,7 @@ def dispatch_compile(_classname, tokengen, writer):
         s = compile_class(token, tokengen)
     else:
         raise JackSyntaxError("Class file must begin with class declaration")
+    writer.write("\n".join(s))
 
 
 def compile_class(t, tokengen):
@@ -133,7 +137,6 @@ def compile_class(t, tokengen):
 
     # subroutines
     while t.type == "keyword" and t.value in ("constructor", "function", "method"):
-        # TODO: Constructors have to alloc memory and return pointer 0 (this)
         s += compile_subroutine(t, tokengen)
         t = next(tokengen)
 
@@ -155,7 +158,6 @@ def compile_subroutine(t, tokengen):
     # type
     t = next(tokengen)
     # subroutineName
-    # TODO: Figure out the right name, if method, num locals, etc
     name = t.value
     t = next(tokengen)
     # '(' parameterList ')'
@@ -218,7 +220,6 @@ def compile_subroutine_body(t, tokengen):
     s += compile_statements(t, tokengen)
     t = next(tokengen)
     expect(t, "}")
-    # TODO: Clear out local symbols?
     return s
 
 
@@ -292,6 +293,7 @@ def compile_do(t, tokengen):
          subroutineName '(' expressionList ')' | (className | varName) '.' subroutineName '(' expressionList ')'
     """
     s = []
+    numargs = 0
     # do keyword
     expect(t, "do")
     t = next(tokengen)
@@ -310,14 +312,15 @@ def compile_do(t, tokengen):
             # call and its name to push as 'this'
             symbol = st.get(name)
             name = symbol.type + "." + t.value
-            s.append("push {0.section} {0.index} # {0.name}".format(symbol))
+            s.append(push_symbol(symbol))
+            numargs += 1
         except:
             # Otherwise, must be a class function call, no extra args
-            pass
-        # TODO: Check symbol table to determine if the first identifier is a symbol or a class
+            name = name + "." + t.value
         t = next(tokengen)
     else:  # If the object or class isn't specified, it's a 'thismethod'
         s.append("push pointer 0")
+        numargs += 1
         name = classname + "." + name
 
     # '(' symbol
@@ -325,7 +328,9 @@ def compile_do(t, tokengen):
     t = next(tokengen)
 
     # expressionList
-    s += compile_expression_list(t, tokengen)
+    args, n = compile_expression_list(t, tokengen)
+    s += args
+    numargs += n
     t = next(tokengen)
 
     # ')' symbol
@@ -335,8 +340,6 @@ def compile_do(t, tokengen):
     # ';' symbol
     expect(t, ";")
 
-    # TODO: get the number of args
-    numargs = 1000
     s.append("call {} {}".format(name, numargs))
     # Throw away the return value
     s.append("pop temp 0")
@@ -354,20 +357,32 @@ def compile_let(t, tokengen):
     # varName
     t = next(tokengen)
     name = t.value
+    symbol = st.get(name)
+
+    poptarget = []
 
     t = next(tokengen)
-    # TODO: Find the variable in the symbol table
-    # Allow square brackets
+    # Array access
     if t.value == "[":
-        # TODO: Array!
         # '[' symbol
         t = next(tokengen)
-        # single expression
+        # single expression (offset into array)
         s += compile_expression(t, tokengen)
+        # push symbol
+        s.append(push_symbol(symbol))
+        # add the offset
+        s.append("add")
+        # can't pop it into `that` yet: there might be other array access that'll trash `that`.
         t = next(tokengen)
         # ']' symbol
         expect(t, "]")
         t = next(tokengen)
+        poptarget.append("pop temp 0\t# pop expression to assign")
+        poptarget.append("pop pointer 1\t# pop target pointer into that")
+        poptarget.append("push temp 0\t# push expression back")
+        poptarget.append("pop that 0\t# pop into that[0]")
+    else:
+        poptarget.append(pop_symbol(symbol))
     # '='
     expect(t, "=")
     t = next(tokengen)
@@ -376,10 +391,8 @@ def compile_let(t, tokengen):
     t = next(tokengen)
     # ';'
     expect(t, ";")
+    s += poptarget
 
-    # TODO: pop it into the target variable
-    symbol = st.get(name)
-    s.append("pop {0.section} {0.index} # {0.name}".format(symbol))
 
     return s
 
@@ -396,7 +409,7 @@ def compile_while(t, tokengen):
     t = next(tokengen)
     # '(' symbol
     t = next(tokengen)
-    s.append("label {}".format(top_label))
+    s.append(write_label(top_label))
     # single expression
     s += compile_expression(t, tokengen)
     t = next(tokengen)
@@ -414,7 +427,7 @@ def compile_while(t, tokengen):
     # '}' symbol
     expect(t, "}")
     s.append("goto {}".format(top_label))
-    s.append("label {}".format(end_label))
+    s.append(write_label(end_label))
 
     return s
 
@@ -466,8 +479,6 @@ def compile_if(t, tokengen):
     t = next(tokengen)
     # '{' symbol
     expect(t, "{")
-    # TODO: Jump past if to end or to else (need name by now)
-    # TODO: No label needed, just fall through
     t = next(tokengen)
     # statements
     s += compile_statements(t, tokengen)
@@ -478,12 +489,12 @@ def compile_if(t, tokengen):
     # If there's no else, then we're done
     tp = tokengen.peek()
     if tp.value != "else":
-        s.append("label {}".format(else_label))
+        s.append(write_label(else_label))
         return s
 
     # Done the if block, jump over the else
     s.append("goto {}".format(end_label))
-    s.append("label {}".format(else_label))
+    s.append(write_label(else_label))
 
     t = next(tokengen)
     # else keyword
@@ -491,14 +502,13 @@ def compile_if(t, tokengen):
     t = next(tokengen)
     # '{' symbol
     expect(t, "{")
-    # TODO: Add jump label
     t = next(tokengen)
     # statements
     s += compile_statements(t, tokengen)
     t = next(tokengen)
     # '}' symbol
     expect(t, "}")
-    s.append("label {}".format(end_label))
+    s.append(write_label(end_label))
 
     return s
 
@@ -569,12 +579,14 @@ def compile_term(t, tokengen):
         name = t.value
         tp = tokengen.peek()
         if tp.value == ".":  # Method/class function call
+            numargs = 0
             try:
                 # If the identifier is a symbol, get its type to namespace the
                 # call and its name to push 'this'
                 symbol = st.get(name)
                 name = symbol.type
-                s.append("push {0.section} {0.index} # {0.name}".format(symbol))
+                s.append(push_symbol(symbol))
+                numargs += 1
             except:
                 # Otherwise, must be a function or constructor call
                 pass
@@ -591,22 +603,32 @@ def compile_term(t, tokengen):
             t = next(tokengen)
 
             # expressionList
-            s += compile_expression_list(t, tokengen)
+            args, n = compile_expression_list(t, tokengen)
+            s += args
+            numargs += n
             t = next(tokengen)
 
             # ')' symbol
             expect(t, ")")
 
             # Now with the args set up call the method
-            s.append("call {}".format(name))
+            s.append("call {} {}".format(name, numargs))
         elif tp.value == "[":  # Array access
             t = next(tokengen)
             # '[' symbol
             expect(t, "[")
             t = next(tokengen)
 
-            # expression
+            # expression for index
             s += compile_expression(t, tokengen)
+            symbol = st.get(name)
+            s.append(push_symbol(symbol))
+            # add array base to index
+            s.append("add")
+            # pop into that
+            s.append("pop pointer 1")
+            # push value at that[0]
+            s.append("push that 0")
             t = next(tokengen)
 
             # ']' symbol
@@ -614,25 +636,28 @@ def compile_term(t, tokengen):
         elif tp.value == "(":  # This method call
             # Push 'this'
             s.append("push pointer 0")
+            numargs = 1
             t = next(tokengen)
             # '(' symbol
             expect(t, "(")
             t = next(tokengen)
 
             # expressionList
-            s += compile_expression_list(t, tokengen)
+            args, n = compile_expression_list(t, tokengen)
+            s += args
+            numargs += n
             t = next(tokengen)
 
             # ')' symbol
             expect(t, ")")
 
             # Now with args set up call the function
-            s.append("call {}".format(name))
+            s.append("call {} {}".format(name, numargs))
         else:  # Just a reference
             # In this case we DON'T pop the peeked token
             # TODO: Find section and index
             symbol = st.get(name)
-            s.append("push {0.section} {0.index} # {0.name}".format(symbol))
+            s.append(push_symbol(symbol))
             pass
 
     return s
@@ -643,16 +668,19 @@ def compile_expression_list(t, tokengen):
     (expression (',' expression)*)?
     """
     s = []
+    n = 0
     while t.value != ")":
         s += compile_expression(t, tokengen)
+        n += 1
         t = next(tokengen)
         while t.value == ",":
             t = next(tokengen)
             s += compile_expression(t, tokengen)
+            n += 1
             t = next(tokengen)
 
     tokengen.pushback(t)
-    return s
+    return s, n
 
 def compile_expression(t, tokengen):
     """
@@ -664,7 +692,6 @@ def compile_expression(t, tokengen):
     s += compile_term(t, tokengen)
     t = tokengen.peek()
     if t.value in INFIX_OPS:
-    # while t.value in INFIX_OPS:
         # Remove peeked value
         next(tokengen)
         op = INFIX_OPS[t.value]
@@ -672,9 +699,8 @@ def compile_expression(t, tokengen):
         # term
         # TODO: Should we consider this next term a new expression (and not need the loop?)
         s += compile_expression(t, tokengen)
-        # s += compile_term(t, tokengen)
         t = tokengen.peek()
         # Emit op last
-        s.append(op) # TODO: Is this a call?
+        s.append(op)
 
     return s
