@@ -79,11 +79,11 @@ class SymbolTable():
 
 
 def push_symbol(symbol):
-    return "push {0.section} {0.index}\t# {0.name}".format(symbol)
+    return "push {0.section} {0.index}\t// {0.name}".format(symbol)
 
 
 def pop_symbol(symbol):
-    return "pop {0.section} {0.index}\t# {0.name}".format(symbol)
+    return "pop {0.section} {0.index}\t// {0.name}".format(symbol)
 
 
 def write_label(label):
@@ -375,10 +375,10 @@ def compile_let(t, tokengen):
         # ']' symbol
         expect(t, "]")
         t = next(tokengen)
-        poptarget.append("pop temp 0\t# pop expression to assign")
-        poptarget.append("pop pointer 1\t# pop target pointer into that")
-        poptarget.append("push temp 0\t# push expression back")
-        poptarget.append("pop that 0\t# pop into that[0]")
+        poptarget.append("pop temp 0\t// pop expression to assign")
+        poptarget.append("pop pointer 1\t// pop target pointer into that")
+        poptarget.append("push temp 0\t// push expression back")
+        poptarget.append("pop that 0\t// pop into that[0]")
     else:
         poptarget.append(pop_symbol(symbol))
     # '='
@@ -553,7 +553,7 @@ def compile_term(t, tokengen):
         s.append("push constant {}".format(t.value))
     elif t.type == "stringConstant":
         l = len(t.value)
-        s.append("push constant {}\t# Creating string \"{}\"".format(l, t.value))
+        s.append("push constant {}\t// Creating string \"{}\"".format(l, t.value))
         s.append("call String.new 1")
         for c in t.value:
             s.append("push constant {}".format(ord(c)))
