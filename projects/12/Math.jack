@@ -8,40 +8,144 @@
  * Note: Jack compilers implement multiplication and division using OS method calls.
  */
 class Math {
+    static Array bits;
 
     /** Initializes the library. */
     function void init() {
+        let bits = Array.new(16);
+        let bits[0] = 1;
+        let bits[1] = 2;
+        let bits[2] = 4;
+        let bits[3] = 8;
+        let bits[4] = 16;
+        let bits[5] = 32;
+        let bits[6] = 64;
+        let bits[7] = 128;
+        let bits[8] = 256;
+        let bits[9] = 512;
+        let bits[10] = 1024;
+        let bits[11] = 2048;
+        let bits[12] = 4096;
+        let bits[13] = 8192;
+        let bits[14] = 16384;
+        let bits[15] = 16384 + 16384;
+        return;
     }
 
     /** Returns the absolute value of x. */
     function int abs(int x) {
+        if (x < 0) { return -x; }
+        return x;
     }
 
-    /** Returns the product of x and y. 
-     *  When a Jack compiler detects the multiplication operator '*' in the 
+    /** Returns the product of x and y.
+     *  When a Jack compiler detects the multiplication operator '*' in the
      *  program's code, it handles it by invoking this method. In other words,
      *  the Jack expressions x*y and multiply(x,y) return the same value.
      */
     function int multiply(int x, int y) {
+        var int sum;
+        var int shiftedX;
+        var int i;
+        let sum = 0;
+        let shiftedX = x;
+        let i = 0;
+        while (i < 16) { // 15 bits
+            if (Math.bit(y, i) = true) {
+                let sum = sum + shiftedX;
+            }
+            let shiftedX = shiftedX + shiftedX;
+            let i = i + 1;
+        }
+        return sum;
     }
 
     /** Returns the integer part of x/y.
-     *  When a Jack compiler detects the multiplication operator '/' in the 
+     *  When a Jack compiler detects the division operator '/' in the
      *  program's code, it handles it by invoking this method. In other words,
      *  the Jack expressions x/y and divide(x,y) return the same value.
      */
     function int divide(int x, int y) {
+        var int q;
+        var int res;
+        var int pos;
+
+        // Base case
+        if (Math.abs(y) > Math.abs(x)) { return 0; }
+
+        if (x < 0) {
+            if (y < 0) {
+                // Positive result
+                let pos = 1;
+            } else {
+                let pos = 0;
+            }
+        } else {
+            if (y < 0) {
+                let pos = 0;
+            } else {
+                let pos = 1;
+            }
+        }
+        let x = Math.abs(x);
+        let y = Math.abs(y);
+        // Check for overflow
+        if ((2 * y) < 0) {
+            let q = 0;
+        } else {
+            let q = Math.divide(x, 2*y);
+        }
+        if ((x - (2*q*y)) < y) {
+            let res = 2 * q;
+        } else {
+            let res = (2 * q) + 1;
+        }
+        if (pos = 1) { return res; }
+        return (-res);
     }
 
     /** Returns the integer part of the square root of x. */
     function int sqrt(int x) {
+        var int y;
+        var int j;
+        var int v;
+        let y = 0;
+        let j = 7; // middle-ish bit
+        while (j > -1) {
+            let v = (y + bits[j]);
+            let v = v*v;
+            if (v < x) { // v <= x
+                if (v > 0) { // Overflow check
+                    let y = y + bits[j];
+                }
+            } else {
+                if (v = x) { // v <= x
+                    if (v > 0) { // Overflow check
+                        let y = y + bits[j];
+                    }
+                }
+            }
+            let j = j - 1;
+        }
+        return y;
     }
 
     /** Returns the greater number. */
     function int max(int a, int b) {
+        if (a > b) { return a; }
+        return b;
     }
 
     /** Returns the smaller number. */
     function int min(int a, int b) {
+        if (a < b) { return a; }
+        return b;
+    }
+
+    function boolean bit(int x, int i) {
+        var int bv;
+        let bv = bits[i];
+        if (x & bv = bv) { return true; }
+        return false;
     }
 }
