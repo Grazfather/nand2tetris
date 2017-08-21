@@ -10,34 +10,167 @@
  * the screen is indexed (0,0).
  */
 class Screen {
+    static int screenbase;
+    static boolean color;
+    static Array bits;
 
     /** Initializes the Screen. */
     function void init() {
+        let screenbase = 16384;
+        let color = true;
+        let bits = Array.new(16);
+        let bits[0] = 1;
+        let bits[1] = 2;
+        let bits[2] = 4;
+        let bits[3] = 8;
+        let bits[4] = 16;
+        let bits[5] = 32;
+        let bits[6] = 64;
+        let bits[7] = 128;
+        let bits[8] = 256;
+        let bits[9] = 512;
+        let bits[10] = 1024;
+        let bits[11] = 2048;
+        let bits[12] = 4096;
+        let bits[13] = 8192;
+        let bits[14] = 16384;
+        let bits[15] = 16384 + 16384;
+        return;
     }
 
     /** Erases the entire screen. */
     function void clearScreen() {
+        var int i;
+        // drawLine draws a pixel at a time, we can go faster by writing 16
+        // bits at a time.
+        let i = 0;
+        while (i < 8192) {
+            let screenbase[i] = 0;
+            let i = i + 1;
+        }
+        return;
     }
 
     /** Sets the current color, to be used for all subsequent drawXXX commands.
      *  Black is represented by true, white by false. */
     function void setColor(boolean b) {
+        let color = b;
+        return;
     }
 
     /** Draws the (x,y) pixel, using the current color. */
     function void drawPixel(int x, int y) {
+        var int offset;
+        var int value;
+        let offset = y * 32 + (x / 16);
+        let value = Memory.peek(screenbase + offset);
+        // TODO: Clear or set depending on current colour;
+        if (color) {
+            let value = value | bits[x & 15];
+        } else {
+            let value = value & ~bits[x & 15];
+        }
+        do Memory.poke(screenbase + offset, value);
+        return;
     }
 
     /** Draws a line from pixel (x1,y1) to pixel (x2,y2), using the current color. */
     function void drawLine(int x1, int y1, int x2, int y2) {
+        var int maxx;
+        var int maxy;
+        var int dx;
+        var int dy;
+        var int a;
+        var int b;
+        var int diff;
+        // Handle straight lines as special cases
+        if (x1 = x2) {
+            let dx = 0;
+            let dy = 1;
+            let a = x1;
+            let b = Math.min(y1, y2);
+            let maxx = 511; // Just more than x
+            let maxy = Math.max(y1, y2);
+        } else {
+            if (y1 = y2) {
+                let dx = 1;
+                let dy = 0;
+                let a = Math.min(x1, x2);
+                let b = y1;
+                let maxx = Math.max(x1, x2);
+                let maxy = 255; // Just more than y
+            }
+        }
+        if ((x1 = x2) | (y1 = y2)) {
+            while ((a < (maxx + 1)) & (b < (maxy + 1))) {
+                do Screen.drawPixel(a, b);
+                let a = a + dx;
+                let b = b + dy;
+            }
+            return;
+        }
+
+        let dx = x2 - x1;
+        let dy = y2 - y1;
+        if (dx > 0) {
+            let maxx = 1;
+        } else {
+            let maxx = -1;
+        }
+        if (dy > 0) {
+            let maxy = 1;
+        } else {
+            let maxy = -1;
+        }
+        let a = 0;
+        let b = 0;
+        let diff = 0;
+        while ((Math.abs(a) < Math.abs(dx+1)) & (Math.abs(b) < Math.abs(dy+1))) {
+            do Screen.drawPixel(x1 + a, y1 + b);
+            if (diff < 0) {
+                let a = a + maxx;
+                let diff = diff + Math.abs(dy);
+            } else {
+                let b = b + maxy;
+                let diff = diff - Math.abs(dx);
+            }
+        }
+        return;
     }
 
     /** Draws a filled rectangle whose top left corner is (x1, y1)
      * and bottom right corner is (x2,y2), using the current color. */
     function void drawRectangle(int x1, int y1, int x2, int y2) {
+        var int y;
+        var int maxy;
+
+        let y = Math.min(y1, y2);
+        let maxy = Math.max(y1, y2);
+
+        while (y < (maxy+1)) {
+            do Screen.drawLine(x1, y, x2, y);
+            let y = y + 1;
+        }
+
+        return;
     }
 
     /** Draws a filled circle of radius r<=181 around (x,y), using the current color. */
     function void drawCircle(int x, int y, int r) {
+        var int dy;
+        var int dx;
+        // Can't draw a circle bigger than 181 (181^2 overflows)
+        if (r > 181) { let r = 181; }
+
+        let dy = -r;
+
+        // Draw 2*r + 1 rows, from dy = -r to dy = r;
+        while (dy < (r+1)) {
+            // Calculate dx
+            let dx = Math.sqrt((r * r) - (dy * dy));
+            do Screen.drawLine(x - dx, y + dy, x + dx, y + dy);
+            let dy = dy + 1;
+        }
+        return;
     }
 }
