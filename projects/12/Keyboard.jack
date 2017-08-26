@@ -7,9 +7,12 @@
  * A library for handling user input from the keyboard.
  */
 class Keyboard {
+    static Array kb;
 
     /** Initializes the keyboard. */
     function void init() {
+        let kb = 24576;
+        return;
     }
 
     /**
@@ -33,6 +36,7 @@ class Keyboard {
      * F1 - F12 = 141 - 152
      */
     function char keyPressed() {
+        return kb[0];
     }
 
     /**
@@ -41,6 +45,24 @@ class Keyboard {
      * of the pressed key.
      */
     function char readChar() {
+        var char c;
+        let c = 0;
+        // Display cursor
+        do Output.printChar(0);
+        // Wait for press
+        while (c = 0) {
+            let c = kb[0];
+        }
+
+        // Wait for release
+        while (~(kb[0] = 0)) {
+        }
+
+        // Output press
+        do Output.backSpace(); // Erase cursor
+        do Output.printChar(c);
+
+        return c;
     }
 
     /**
@@ -49,6 +71,22 @@ class Keyboard {
      * and returns its value. Also handles user backspaces.
      */
     function String readLine(String message) {
+        var char c;
+        var String s;
+
+        do Output.printString(message);
+        let s = String.new(32);
+        let c = Keyboard.readChar();
+        while (~(c = 128)) {
+            if (c = 129) { // Backspace
+                do s.eraseLastChar();
+            } else {
+                do s.appendChar(c);
+            }
+            let c = Keyboard.readChar();
+        }
+        do Output.println();
+        return s;
     }
 
     /**
@@ -58,5 +96,43 @@ class Keyboard {
      * entered text is detected). Also handles user backspaces.
      */
     function int readInt(String message) {
+        var int v;
+        var char c;
+        var boolean neg;
+
+        do Output.printString(message);
+        let v = 0;
+
+        // Special handling of first character: It can be a '-'
+        let c = Keyboard.readChar();
+        if (c = 45) {
+            let neg = true;
+        } else {
+            let neg = false;
+            if ((c > 47) & (c < 58)) {
+                let v = (c - 48);
+            } else {
+                return 0;
+            }
+        }
+
+        let c = Keyboard.readChar();
+        while (~(c = 128) & ((c > 47) & (c < 58)) | (c = 129)) {
+            if (c = 129) { // Backspace
+                if (v = 0) { // If the value was 0, assume we are deleting a minus sign
+                    let neg = false; // This isn't perfect, but good enough
+                }
+                let v = v/10;
+            } else {
+                let v = (v * 10) + (c - 48);
+            }
+            let c = Keyboard.readChar();
+        }
+
+        if (neg) {
+            return -v;
+        } else {
+            return v;
+        }
     }
 }
