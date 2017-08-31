@@ -15,9 +15,16 @@ class Array {
 
     /** Constructs a new Array of the given size. */
     function Array new(int size) {
+        // This isn't a constructor to prevent the compiler from hardcoding its
+        // own allocation based on the number of fields.
+        var int buf;
+        let buf = Memory.alloc(size);
+        return buf;
     }
 
     /** Disposes this array. */
     method void dispose() {
+        do Memory.deAlloc(this);
+        return;
     }
 }
